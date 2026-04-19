@@ -779,7 +779,7 @@ with tabs[1]:
     # Originally this line used escaped double quotes for the key in df_agr, which caused a
     # SyntaxError due to the way f-strings parse escape sequences. Using single quotes for
     # dictionary keys eliminates the need for escapes and is syntactically correct.
-    m2.metric("⏰ Horas Extra",       f"{df_agr['Horas_Extras'].sum():,.0f} H-H")
+    m2.metric("⏰ Horas Extra", f"{df_agr['Horas_Extras'].sum():,.0f} H-H")
     m3.metric("📉 Backlog Total",     f"{df_agr['Backlog_HH'].sum():,.0f} H-H")
     m4.metric("👥 Contrat. Netas",    f"{df_agr['Contratacion'].sum()-df_agr['Despidos'].sum():+.0f} pers.")
 
