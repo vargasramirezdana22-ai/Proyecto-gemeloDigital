@@ -1,4 +1,3 @@
-
 """
 app.py  —  Gemelo Digital · Panadería Dora del Hoyo
 ====================================================
@@ -582,6 +581,14 @@ html, body, [class*="css"] {{font-family:'Plus Jakarta Sans',sans-serif; backgro
 [data-testid="stSidebar"] {{background: linear-gradient(180deg, #fffaf3 0%, #fff3eb 100%) !important; border-right: 1px solid {C["line"]};}}
 [data-testid="stSidebar"] * {{color: {C["text"]} !important;}}
 .stTabs [data-baseweb="tab"] {{font-weight:600;}}
+.sticky-top-wrap {{
+    position: sticky;
+    top: 0.5rem;
+    z-index: 999;
+    background: {C["bg"]};
+    padding-top: 0.2rem;
+    padding-bottom: 0.6rem;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -804,6 +811,8 @@ capacidad_laboral = lr_inicial_calc
 volumen_litros = sum(plan_mes[p] * litros_por_unidad for p in PRODUCTOS)
 
 # encabezado y kpis
+st.markdown('<div class="sticky-top-wrap">', unsafe_allow_html=True)
+
 st.markdown(f"""
 <div class="hero">
   <h1>Gemelo Digital · Panadería Dora del Hoyo</h1>
@@ -840,6 +849,7 @@ kpi_card(k5, "🌡️", f"{temp_avg:.0f}°C", "Promedio térmico", f"{excesos} a
 kpi_card(k6, "👩‍🍳", f"{capacidad_laboral:,.0f}", "Capacidad HH", "mes efectivo")
 
 st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────────────────────────────────
 # TAB 1 · DEMANDA
