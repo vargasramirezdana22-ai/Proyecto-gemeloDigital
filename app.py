@@ -604,26 +604,6 @@ with st.sidebar:
     st.session_state["semilla"] = st.number_input("Semilla aleatoria", value=st.session_state["semilla"], step=1)
     st.caption("Los demás parámetros viven dentro de cada sección funcional.")
 
-# ══════════════════════════════════════════════════════════════════════════════
-# BARRA LATERAL · SOLO GENERALES
-# ══════════════════════════════════════════════════════════════════════════════
-with st.sidebar:
-    st.markdown("## 🥐 Dora del Hoyo")
-    st.markdown("*Gemelo Digital v3.2*")
-    st.markdown("### Parámetros generales")
-    st.session_state["mes_idx"] = st.selectbox(
-        "Mes de análisis",
-        range(12),
-        index=st.session_state["mes_idx"],
-        format_func=lambda i: MESES_F[i],
-    )
-    st.session_state["factor_demanda"] = st.slider("Impulso de demanda", 0.5, 2.0, st.session_state["factor_demanda"], 0.05)
-    st.session_state["meses_pronostico"] = st.slider("Horizonte de proyección", 1, 6, st.session_state["meses_pronostico"])
-    st.session_state["participacion_mercado"] = st.slider("Cobertura comercial (%)", 0.01, 0.25, st.session_state["participacion_mercado"], 0.01)
-    st.session_state["litros_por_unidad"] = st.slider("Volumen por unidad", 0.20, 1.50, st.session_state["litros_por_unidad"], 0.05)
-    st.session_state["semilla"] = st.number_input("Semilla aleatoria", value=st.session_state["semilla"], step=1)
-    st.caption("Los parámetros especializados aparecen dentro de cada módulo.")
-
 PLOT_CFG = dict(
     template="plotly_white",
     font=dict(family="Plus Jakarta Sans", color=C["text"]),
