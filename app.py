@@ -1,985 +1,662 @@
-"""
-app.py  —  Gemelo Digital · Panadería Dora del Hoyo
-====================================================
-Versión 2.0 — Rediseño completo con:
-  • Paleta pastel artesanal
-  • Pronóstico de demanda con proyección futura
-  • Parámetros enriquecidos en agregación y simulación
-  • Gráficas WOW: violin, radar, histograma, sunburst
-  • KPIs visuales mejorados
-
-Ejecutar:  streamlit run app.py
-"""
-
-import math, random
+import math
+import random
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import simpy
 import streamlit as st
-from pulp import LpProblem, LpMinimize, LpVariable, lpSum, value, PULP_CBC_CMD
+from pulp import LpMinimize, LpProblem, LpVariable, PULP_CBC_CMD, lpSum, value
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PALETA PASTEL DORA DEL HOYO
-# ══════════════════════════════════════════════════════════════════════════════
-C = {
-    "cream":   "#FFF8EE",
-    "caramel": "#F2C27A",
-    "mocha":   "#C68B59",
-    "dark":    "#3D1C02",
-    "rose":    "#F4A7B9",
-    "mint":    "#A8D8B9",
-    "sky":     "#A8D1F0",
-    "lavender":"#C9B8E8",
-    "peach":   "#FFB7A0",
-    "butter":  "#F9E4A0",
-    "sage":    "#B5CDA3",
-}
-
-PROD_COLORS = {
-    "Brownies":           "#F2C27A",
-    "Mantecadas":         "#A8D1F0",
-    "Mantecadas_Amapola": "#A8D8B9",
-    "Torta_Naranja":      "#C9B8E8",
-    "Pan_Maiz":           "#FFB7A0",
-}
-PROD_COLORS_DARK = {
-    "Brownies":           "#C68B3A",
-    "Mantecadas":         "#4A90C4",
-    "Mantecadas_Amapola": "#5BAF7A",
-    "Torta_Naranja":      "#8B6BBF",
-    "Pan_Maiz":           "#E07050",
-}
-PROD_LABELS = {
-    "Brownies":"Brownies","Mantecadas":"Mantecadas",
-    "Mantecadas_Amapola":"Mant. Amapola","Torta_Naranja":"Torta Naranja","Pan_Maiz":"Pan de Maíz",
+# ============================================================
+# IDENTIDAD VISUAL - VERSIÓN REPLANTEADA
+# ============================================================
+PALETTE = {
+    "bg": "#0F172A",
+    "panel": "#111827",
+    "panel_2": "#1F2937",
+    "card": "#FFFFFF",
+    "txt": "#E5E7EB",
+    "muted": "#94A3B8",
+    "accent": "#22C55E",
+    "accent_2": "#38BDF8",
+    "warn": "#F59E0B",
+    "danger": "#F43F5E",
+    "violet": "#8B5CF6",
 }
 
-# ══════════════════════════════════════════════════════════════════════════════
-# HELPER: hex → rgba (compatible con todas las versiones de Plotly)
-# ══════════════════════════════════════════════════════════════════════════════
-def hex_rgba(hex_color, alpha=0.15):
-    h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+PRODUCTS = ["Brownies", "Mantecadas", "Mantecadas_Amapola", "Torta_Naranja", "Pan_Maiz"]
+MONTHS_EN = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+]
+MONTHS_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+MONTHS_FULL = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+]
+
+PRODUCT_NAMES = {
+    "Brownies": "Brownies",
+    "Mantecadas": "Mantecadas",
+    "Mantecadas_Amapola": "Mantecadas con Amapola",
+    "Torta_Naranja": "Torta de Naranja",
+    "Pan_Maiz": "Pan de Maíz",
+}
+
+PRODUCT_COLORS = {
+    "Brownies": "#22C55E",
+    "Mantecadas": "#38BDF8",
+    "Mantecadas_Amapola": "#8B5CF6",
+    "Torta_Naranja": "#F97316",
+    "Pan_Maiz": "#EAB308",
+}
+
+PRODUCT_EMOJI = {
+    "Brownies": "🍫",
+    "Mantecadas": "🧁",
+    "Mantecadas_Amapola": "🌸",
+    "Torta_Naranja": "🍊",
+    "Pan_Maiz": "🌽",
+}
+
+HIST_DEMAND = {
+    "Brownies": [315, 804, 734, 541, 494, 59, 315, 803, 734, 541, 494, 59],
+    "Mantecadas": [125, 780, 432, 910, 275, 68, 512, 834, 690, 455, 389, 120],
+    "Mantecadas_Amapola": [320, 710, 520, 251, 631, 150, 330, 220, 710, 610, 489, 180],
+    "Torta_Naranja": [100, 250, 200, 101, 190, 50, 100, 220, 200, 170, 180, 187],
+    "Pan_Maiz": [330, 140, 143, 73, 83, 48, 70, 89, 118, 83, 67, 87],
+}
+
+HOURS_PER_UNIT = {
+    "Brownies": 0.866,
+    "Mantecadas": 0.175,
+    "Mantecadas_Amapola": 0.175,
+    "Torta_Naranja": 0.175,
+    "Pan_Maiz": 0.312,
+}
+
+PROCESS_ROUTES = {
+    "Brownies": [("mezcla", 12, 18), ("dosificado", 8, 14), ("horno", 30, 40), ("enfriamiento", 25, 35), ("empaque", 8, 12)],
+    "Mantecadas": [("mezcla", 12, 18), ("dosificado", 16, 24), ("horno", 20, 30), ("enfriamiento", 35, 55), ("empaque", 4, 6)],
+    "Mantecadas_Amapola": [("mezcla", 12, 18), ("mezcla", 8, 12), ("dosificado", 16, 24), ("horno", 20, 30), ("enfriamiento", 36, 54), ("empaque", 4, 6)],
+    "Torta_Naranja": [("mezcla", 16, 24), ("dosificado", 8, 12), ("horno", 32, 48), ("enfriamiento", 48, 72), ("dosificado", 8, 12), ("empaque", 8, 12)],
+    "Pan_Maiz": [("mezcla", 12, 18), ("amasado", 16, 24), ("dosificado", 12, 18), ("horno", 28, 42), ("enfriamiento", 36, 54), ("empaque", 4, 6)],
+}
+
+BATCH_SIZE = {
+    "Brownies": 12,
+    "Mantecadas": 10,
+    "Mantecadas_Amapola": 10,
+    "Torta_Naranja": 12,
+    "Pan_Maiz": 15,
+}
+
+BASE_SETTINGS = {
+    "Ct": 4310,
+    "Ht": 100000,
+    "PIt": 100000,
+    "CRt": 11364,
+    "COt": 14205,
+    "CW_plus": 14204,
+    "CW_minus": 15061,
+    "M": 1,
+    "LR_initial": 44 * 4 * 10,
+}
+
+INITIAL_STOCK = {p: 0 for p in PRODUCTS}
+
+
+def rgba(hex_color: str, alpha: float = 0.18) -> str:
+    color = hex_color.lstrip("#")
+    r, g, b = int(color[0:2], 16), int(color[2:4], 16), int(color[4:6], 16)
     return f"rgba({r},{g},{b},{alpha})"
 
-# ══════════════════════════════════════════════════════════════════════════════
-# DATOS MAESTROS
-# ══════════════════════════════════════════════════════════════════════════════
-PRODUCTOS = ["Brownies","Mantecadas","Mantecadas_Amapola","Torta_Naranja","Pan_Maiz"]
-MESES     = ["January","February","March","April","May","June","July","August","September","October","November","December"]
-MESES_ES  = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
-MESES_F   = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
 
-DEM_HISTORICA = {
-    "Brownies":           [315,804,734,541,494, 59,315,803,734,541,494, 59],
-    "Mantecadas":         [125,780,432,910,275, 68,512,834,690,455,389,120],
-    "Mantecadas_Amapola": [320,710,520,251,631,150,330,220,710,610,489,180],
-    "Torta_Naranja":      [100,250,200,101,190, 50,100,220,200,170,180,187],
-    "Pan_Maiz":           [330,140,143, 73, 83, 48, 70, 89,118, 83, 67, 87],
-}
-HORAS_PRODUCTO = {"Brownies":0.866,"Mantecadas":0.175,"Mantecadas_Amapola":0.175,"Torta_Naranja":0.175,"Pan_Maiz":0.312}
-RUTAS = {
-    "Brownies":           [("Mezclado","mezcla",12,18),("Moldeado","dosificado",8,14),("Horneado","horno",30,40),("Enfriamiento","enfriamiento",25,35),("Corte/Empaque","empaque",8,12)],
-    "Mantecadas":         [("Mezclado","mezcla",12,18),("Dosificado","dosificado",16,24),("Horneado","horno",20,30),("Enfriamiento","enfriamiento",35,55),("Empaque","empaque",4,6)],
-    "Mantecadas_Amapola": [("Mezclado","mezcla",12,18),("Inc. Semillas","mezcla",8,12),("Dosificado","dosificado",16,24),("Horneado","horno",20,30),("Enfriamiento","enfriamiento",36,54),("Empaque","empaque",4,6)],
-    "Torta_Naranja":      [("Mezclado","mezcla",16,24),("Dosificado","dosificado",8,12),("Horneado","horno",32,48),("Enfriamiento","enfriamiento",48,72),("Desmolde","dosificado",8,12),("Empaque","empaque",8,12)],
-    "Pan_Maiz":           [("Mezclado","mezcla",12,18),("Amasado","amasado",16,24),("Moldeado","dosificado",12,18),("Horneado","horno",28,42),("Enfriamiento","enfriamiento",36,54),("Empaque","empaque",4,6)],
-}
-TAMANO_LOTE_BASE = {"Brownies":12,"Mantecadas":10,"Mantecadas_Amapola":10,"Torta_Naranja":12,"Pan_Maiz":15}
-CAPACIDAD_BASE   = {"mezcla":2,"dosificado":2,"horno":3,"enfriamiento":4,"empaque":2,"amasado":1}
-PARAMS_DEFAULT   = {"Ct":4_310,"Ht":100_000,"PIt":100_000,"CRt":11_364,"COt":14_205,"CW_mas":14_204,"CW_menos":15_061,"M":1,"LR_inicial":44*4*10,"inv_seg":0.0}
-INV_INICIAL = {p:0 for p in PRODUCTOS}
-
-# ══════════════════════════════════════════════════════════════════════════════
-# FUNCIONES CORE
-# ══════════════════════════════════════════════════════════════════════════════
-
-def demanda_horas_hombre(factor=1.0):
-    return {mes:round(sum(DEM_HISTORICA[p][i]*HORAS_PRODUCTO[p] for p in PRODUCTOS)*factor,4)
-            for i,mes in enumerate(MESES)}
-
-def pronostico_simple(serie, meses_extra=3):
-    alpha=0.3; nivel=serie[0]; suavizada=[]
-    for v in serie:
-        nivel=alpha*v+(1-alpha)*nivel; suavizada.append(nivel)
-    futuro=[]; last=suavizada[-1]
-    trend=(suavizada[-1]-suavizada[-4])/3 if len(suavizada)>=4 else 0
-    for _ in range(meses_extra):
-        last=last+alpha*trend; futuro.append(round(last,1))
-    return suavizada, futuro
-
-@st.cache_data(show_spinner=False)
-def run_agregacion(factor_demanda=1.0, params_tuple=None):
-    params=PARAMS_DEFAULT.copy()
-    if params_tuple: params.update(dict(params_tuple))
-    dem_h=demanda_horas_hombre(factor_demanda)
-    Ct=params["Ct"]; Ht=params["Ht"]; PIt=params["PIt"]
-    CRt=params["CRt"]; COt=params["COt"]; Wm=params["CW_mas"]; Wd=params["CW_menos"]
-    M=params["M"]; LRi=params["LR_inicial"]
-    mdl=LpProblem("Agregacion",LpMinimize)
-    P=LpVariable.dicts("P",MESES,lowBound=0); I=LpVariable.dicts("I",MESES,lowBound=0)
-    S=LpVariable.dicts("S",MESES,lowBound=0); LR=LpVariable.dicts("LR",MESES,lowBound=0)
-    LO=LpVariable.dicts("LO",MESES,lowBound=0); LU=LpVariable.dicts("LU",MESES,lowBound=0)
-    NI=LpVariable.dicts("NI",MESES)
-    Wmas=LpVariable.dicts("Wm",MESES,lowBound=0); Wmenos=LpVariable.dicts("Wd",MESES,lowBound=0)
-    mdl += lpSum(Ct*P[t]+Ht*I[t]+PIt*S[t]+CRt*LR[t]+COt*LO[t]+Wm*Wmas[t]+Wd*Wmenos[t] for t in MESES)
-    for idx,t in enumerate(MESES):
-        d=dem_h[t]; tp=MESES[idx-1] if idx>0 else None
-        if idx==0: mdl += NI[t]==0+P[t]-d
-        else:      mdl += NI[t]==NI[tp]+P[t]-d
-        mdl += NI[t]==I[t]-S[t]; mdl += LU[t]+LO[t]==M*P[t]; mdl += LU[t]<=LR[t]
-        if idx==0: mdl += LR[t]==LRi+Wmas[t]-Wmenos[t]
-        else:      mdl += LR[t]==LR[tp]+Wmas[t]-Wmenos[t]
-    mdl.solve(PULP_CBC_CMD(msg=False)); costo=value(mdl.objective)
-    ini_l,fin_l=[],[]
-    for idx,t in enumerate(MESES):
-        ini=0.0 if idx==0 else fin_l[-1]; ini_l.append(ini)
-        fin_l.append(ini+(P[t].varValue or 0)-dem_h[t])
-    df=pd.DataFrame({
-        "Mes":MESES,"Mes_F":MESES_F,"Mes_ES":MESES_ES,
-        "Demanda_HH":      [round(dem_h[t],2) for t in MESES],
-        "Produccion_HH":   [round(P[t].varValue or 0,2) for t in MESES],
-        "Backlog_HH":      [round(S[t].varValue or 0,2) for t in MESES],
-        "Horas_Regulares": [round(LR[t].varValue or 0,2) for t in MESES],
-        "Horas_Extras":    [round(LO[t].varValue or 0,2) for t in MESES],
-        "Inv_Ini_HH":      [round(v,2) for v in ini_l],
-        "Inv_Fin_HH":      [round(v,2) for v in fin_l],
-        "Contratacion":    [round(Wmas[t].varValue or 0,2) for t in MESES],
-        "Despidos":        [round(Wmenos[t].varValue or 0,2) for t in MESES],
-    })
-    return df, costo
-
-@st.cache_data(show_spinner=False)
-def run_desagregacion(prod_hh_items, factor_demanda=1.0):
-    prod_hh=dict(prod_hh_items)
-    mdl=LpProblem("Desagregacion",LpMinimize)
-    X={(p,t):LpVariable(f"X_{p}_{t}",lowBound=0) for p in PRODUCTOS for t in MESES}
-    I={(p,t):LpVariable(f"I_{p}_{t}",lowBound=0) for p in PRODUCTOS for t in MESES}
-    S={(p,t):LpVariable(f"S_{p}_{t}",lowBound=0) for p in PRODUCTOS for t in MESES}
-    mdl += lpSum(100_000*I[p,t]+150_000*S[p,t] for p in PRODUCTOS for t in MESES)
-    for idx,t in enumerate(MESES):
-        tp=MESES[idx-1] if idx>0 else None
-        mdl += (lpSum(HORAS_PRODUCTO[p]*X[p,t] for p in PRODUCTOS)<=prod_hh[t],f"Cap_{t}")
-        for p in PRODUCTOS:
-            d=int(DEM_HISTORICA[p][idx]*factor_demanda)
-            if idx==0: mdl += I[p,t]-S[p,t]==INV_INICIAL[p]+X[p,t]-d
-            else:      mdl += I[p,t]-S[p,t]==I[p,tp]-S[p,tp]+X[p,t]-d
-    mdl.solve(PULP_CBC_CMD(msg=False))
-    resultados={}
-    for p in PRODUCTOS:
-        filas=[]
-        for idx,t in enumerate(MESES):
-            xv=round(X[p,t].varValue or 0,2); iv=round(I[p,t].varValue or 0,2)
-            sv=round(S[p,t].varValue or 0,2)
-            ini=INV_INICIAL[p] if idx==0 else round(I[p,MESES[idx-1]].varValue or 0,2)
-            filas.append({"Mes":t,"Mes_ES":MESES_ES[idx],"Mes_F":MESES_F[idx],
-                          "Demanda":int(DEM_HISTORICA[p][idx]*factor_demanda),
-                          "Produccion":xv,"Inv_Ini":ini,"Inv_Fin":iv,"Backlog":sv})
-        resultados[p]=pd.DataFrame(filas)
-    return resultados
-
-@st.cache_data(show_spinner=False)
-def run_simulacion_cached(plan_items, cap_items, falla, factor_t, semilla=42):
-    plan_unidades=dict(plan_items); cap_recursos=dict(cap_items)
-    random.seed(semilla); np.random.seed(semilla)
-    lotes_data,uso_rec,sensores=[],[],[]
-    def sensor_horno(env,recursos):
-        while True:
-            ocp=recursos["horno"].count
-            temp=round(np.random.normal(160+ocp*20,5),2)
-            sensores.append({"tiempo":round(env.now,1),"temperatura":temp,"horno_ocup":ocp,"horno_cola":len(recursos["horno"].queue)})
-            yield env.timeout(10)
-    def reg_uso(env,recursos,prod=""):
-        ts=round(env.now,3)
-        for nm,r in recursos.items():
-            uso_rec.append({"tiempo":ts,"recurso":nm,"ocupados":r.count,"cola":len(r.queue),"capacidad":r.capacity,"producto":prod})
-    def proceso_lote(env,lid,prod,tam,recursos):
-        t0=env.now; esperas={}
-        for etapa,rec_nm,tmin,tmax in RUTAS[prod]:
-            escala=math.sqrt(tam/TAMANO_LOTE_BASE[prod])
-            tp=random.uniform(tmin,tmax)*escala*factor_t
-            if falla and rec_nm=="horno": tp+=random.uniform(10,30)
-            reg_uso(env,recursos,prod); t_entrada=env.now
-            with recursos[rec_nm].request() as req:
-                yield req; esperas[etapa]=round(env.now-t_entrada,3)
-                reg_uso(env,recursos,prod); yield env.timeout(tp)
-            reg_uso(env,recursos,prod)
-        lotes_data.append({"lote_id":lid,"producto":prod,"tamano":tam,
-                           "t_creacion":round(t0,3),"t_fin":round(env.now,3),
-                           "tiempo_sistema":round(env.now-t0,3),
-                           "total_espera":round(sum(esperas.values()),3)})
-    env=simpy.Environment()
-    recursos={nm:simpy.Resource(env,capacity=cap) for nm,cap in cap_recursos.items()}
-    env.process(sensor_horno(env,recursos))
-    dur_mes=44*4*60; lotes=[]; ctr=[0]
-    for prod,unid in plan_unidades.items():
-        if unid<=0: continue
-        tam=TAMANO_LOTE_BASE[prod]; n=math.ceil(unid/tam)
-        tasa=dur_mes/max(n,1); ta=random.expovariate(1/max(tasa,1)); rem=unid
-        for _ in range(n):
-            lotes.append((round(ta,2),prod,min(tam,int(rem)))); rem-=tam
-            ta+=random.expovariate(1/max(tasa,1))
-    lotes.sort(key=lambda x:x[0])
-    def lanzador():
-        for ta,prod,tam in lotes:
-            yield env.timeout(max(ta-env.now,0))
-            lid=f"{prod[:3].upper()}_{ctr[0]:04d}"; ctr[0]+=1
-            env.process(proceso_lote(env,lid,prod,tam,recursos))
-    env.process(lanzador()); env.run(until=dur_mes*1.8)
-    df_lotes=pd.DataFrame(lotes_data) if lotes_data else pd.DataFrame()
-    df_uso=pd.DataFrame(uso_rec) if uso_rec else pd.DataFrame()
-    df_sensores=pd.DataFrame(sensores) if sensores else pd.DataFrame()
-    return df_lotes,df_uso,df_sensores
-
-def calc_utilizacion(df_uso):
-    if df_uso.empty: return pd.DataFrame()
-    filas=[]
-    for rec,grp in df_uso.groupby("recurso"):
-        grp=grp.sort_values("tiempo").reset_index(drop=True)
-        cap=grp["capacidad"].iloc[0]; t=grp["tiempo"].values; ocp=grp["ocupados"].values
-        if len(t)>1 and (t[-1]-t[0])>0:
-            fn=np.trapezoid if hasattr(np,"trapezoid") else np.trapz
-            util=round(fn(ocp,t)/(cap*(t[-1]-t[0]))*100,2)
-        else: util=0.0
-        filas.append({"Recurso":rec,"Utilizacion_%":util,"Cola Prom":round(grp["cola"].mean(),3),
-                      "Cola Max":int(grp["cola"].max()),"Capacidad":int(cap),
-                      "Cuello Botella":util>=80 or grp["cola"].mean()>0.5})
-    return pd.DataFrame(filas).sort_values("Utilizacion_%",ascending=False).reset_index(drop=True)
-
-def calc_kpis(df_lotes,plan):
-    if df_lotes.empty: return pd.DataFrame()
-    dur=(df_lotes["t_fin"].max()-df_lotes["t_creacion"].min())/60; filas=[]
-    for p in PRODUCTOS:
-        sub=df_lotes[df_lotes["producto"]==p]
-        if sub.empty: continue
-        und=sub["tamano"].sum(); plan_und=plan.get(p,0)
-        tp=round(und/max(dur,0.01),3); ct=round((sub["tiempo_sistema"]/sub["tamano"]).mean(),3)
-        lt=round(sub["tiempo_sistema"].mean(),3)
-        dem_avg=sum(DEM_HISTORICA[p])/12
-        takt=round((44*4*60)/max(dem_avg/TAMANO_LOTE_BASE[p],1),2)
-        wip=round(tp*(lt/60),2)
-        filas.append({"Producto":PROD_LABELS[p],"Und Producidas":und,"Plan":plan_und,
-                      "Throughput (und/h)":tp,"Cycle Time (min/und)":ct,
-                      "Lead Time (min/lote)":lt,"WIP Prom":wip,"Takt (min/lote)":takt,
-                      "Cumplimiento %":round(min(und/max(plan_und,1)*100,100),2)})
-    return pd.DataFrame(filas)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# CONFIG STREAMLIT
-# ══════════════════════════════════════════════════════════════════════════════
-st.set_page_config(page_title="Gemelo Digital · Dora del Hoyo", page_icon="🥐",
-                   layout="wide", initial_sidebar_state="expanded")
-
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap');
-html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;background:#FFF8EE;}
-.hero{background:linear-gradient(135deg,#3D1C02 0%,#C68B59 60%,#F2C27A 100%);
-  padding:2rem 2.5rem 1.6rem;border-radius:20px;margin-bottom:1.5rem;
-  box-shadow:0 12px 40px rgba(61,28,2,0.18);position:relative;overflow:hidden;}
-.hero::before{content:"🥐";font-size:9rem;position:absolute;right:1.5rem;top:-1.5rem;
-  opacity:0.1;transform:rotate(-15deg);}
-.hero h1{font-family:'Fraunces',serif;color:#FFF8EE;font-size:2.2rem;margin:0;letter-spacing:-0.5px;}
-.hero p{color:#F9E4A0;margin:0.35rem 0 0;font-size:0.93rem;font-weight:300;}
-.hero .badge{display:inline-block;background:rgba(255,255,255,0.15);color:#FFF8EE;
-  padding:0.2rem 0.7rem;border-radius:20px;font-size:0.75rem;margin-top:0.6rem;
-  margin-right:0.3rem;border:1px solid rgba(255,255,255,0.25);}
-.kpi-card{background:white;border-radius:16px;padding:1.1rem 1.2rem;
-  box-shadow:0 4px 16px rgba(61,28,2,0.07);border:1px solid rgba(242,194,122,0.35);
-  text-align:center;transition:transform 0.2s;}
-.kpi-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(61,28,2,0.12);}
-.kpi-card .icon{font-size:1.7rem;margin-bottom:0.25rem;}
-.kpi-card .val{font-family:'Fraunces',serif;font-size:1.8rem;color:#3D1C02;line-height:1;margin:0.1rem 0;}
-.kpi-card .lbl{font-size:0.7rem;color:#C68B59;text-transform:uppercase;letter-spacing:1px;font-weight:600;}
-.kpi-card .sub{font-size:0.76rem;color:#9B7B5A;margin-top:0.2rem;}
-.sec-title{font-family:'Fraunces',serif;font-size:1.3rem;color:#3D1C02;
-  border-left:4px solid #F2C27A;padding-left:0.75rem;margin:1.5rem 0 0.8rem;}
-.info-box{background:linear-gradient(135deg,rgba(249,228,160,0.3),rgba(255,248,238,0.8));
-  border:1px solid rgba(242,194,122,0.5);border-radius:12px;
-  padding:0.8rem 1rem;font-size:0.87rem;color:#3D1C02;margin:0.5rem 0 0.8rem;}
-.pill-ok{background:#A8D8B9;color:#1B5E20;padding:0.3rem 0.9rem;
-  border-radius:20px;font-size:0.82rem;font-weight:600;display:inline-block;}
-.pill-warn{background:#F4A7B9;color:#880E2E;padding:0.3rem 0.9rem;
-  border-radius:20px;font-size:0.82rem;font-weight:600;display:inline-block;}
-[data-testid="stSidebar"]{background:#3D1C02 !important;}
-[data-testid="stSidebar"] label,[data-testid="stSidebar"] p,
-[data-testid="stSidebar"] span,[data-testid="stSidebar"] div{color:#F9E4A0 !important;}
-[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3{color:#F2C27A !important;font-family:'Fraunces',serif !important;}
-[data-testid="stSidebar"] hr{border-color:#C68B5960 !important;}
-.stTabs [data-baseweb="tab"]{font-family:'Plus Jakarta Sans',sans-serif;font-weight:500;color:#C68B59;}
-.stTabs [aria-selected="true"]{color:#3D1C02 !important;}
-</style>
-""", unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# SIDEBAR
-# ══════════════════════════════════════════════════════════════════════════════
-with st.sidebar:
-    st.markdown("## 🥐 Dora del Hoyo")
-    st.markdown("*Gemelo Digital v2.0*")
-    st.markdown("---")
-    st.markdown("### 📅 Mes a simular")
-    mes_idx = st.selectbox("Mes", range(12), index=1, format_func=lambda i: MESES_F[i], label_visibility="collapsed")
-    st.markdown("### 📊 Demanda")
-    factor_demanda   = st.slider("Factor de demanda", 0.5, 2.0, 1.0, 0.05)
-    meses_pronostico = st.slider("Meses de pronóstico a proyectar", 1, 6, 3)
-    st.markdown("### 🏭 Producción")
-    cap_horno   = st.slider("Capacidad del horno (estaciones)", 1, 6, 3)
-    falla_horno = st.checkbox("⚠️ Simular fallas en horno")
-    doble_turno = st.checkbox("🕐 Doble turno (−20% tiempo)")
-    semilla     = st.number_input("Semilla aleatoria", value=42, step=1)
-    st.markdown("### 💰 Costos (COP)")
-    with st.expander("⚙️ Configuración del modelo LP"):
-        ct   = st.number_input("Costo producción/und (Ct)",    value=4_310,   step=100)
-        crt  = st.number_input("Costo hora regular (CRt)",     value=11_364,  step=100)
-        cot  = st.number_input("Costo hora extra (COt)",       value=14_205,  step=100)
-        ht   = st.number_input("Costo mantener inv. (Ht)",     value=100_000, step=1000)
-        pit  = st.number_input("Penalización backlog (PIt)",   value=100_000, step=1000)
-        cwp  = st.number_input("Costo contratar (CW+)",        value=14_204,  step=100)
-        cwm  = st.number_input("Costo despedir (CW−)",         value=15_061,  step=100)
-        trab = st.number_input("Trabajadores iniciales",        value=10,      step=1)
-    st.markdown("---")
-    st.markdown("<div style='font-size:0.75rem;color:#F2C27A;'>📍 Panadería Dora del Hoyo<br>🔢 SimPy · PuLP · Streamlit</div>", unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# HERO HEADER
-# ══════════════════════════════════════════════════════════════════════════════
-st.markdown(f"""
-<div class="hero">
-  <h1>Gemelo Digital — Panadería Dora del Hoyo</h1>
-  <p>Optimización de producción · Simulación de eventos discretos · Análisis what-if</p>
-  <span class="badge">📅 {MESES_F[mes_idx]}</span>
-  <span class="badge">📈 Demanda ×{factor_demanda}</span>
-  <span class="badge">🔥 Horno: {cap_horno} est.</span>
-  {"<span class='badge'>⚠️ Falla activa</span>" if falla_horno else ""}
-  {"<span class='badge'>🕐 Doble turno</span>" if doble_turno else ""}
-</div>""", unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# CÁLCULOS PRINCIPALES
-# ══════════════════════════════════════════════════════════════════════════════
-params_custom = {**PARAMS_DEFAULT,"Ct":ct,"CRt":crt,"COt":cot,"Ht":ht,"PIt":pit,
-                 "CW_mas":cwp,"CW_menos":cwm,"LR_inicial":44*4*int(trab)}
-
-with st.spinner("⚙️ Optimizando plan agregado..."):
-    df_agr, costo = run_agregacion(factor_demanda, tuple(sorted(params_custom.items())))
-
-prod_hh = dict(zip(df_agr["Mes"], df_agr["Produccion_HH"]))
-
-with st.spinner("🔢 Desagregando por producto..."):
-    desag = run_desagregacion(tuple(prod_hh.items()), factor_demanda)
-
-mes_nm   = MESES[mes_idx]
-plan_mes = {p:int(desag[p].loc[desag[p]["Mes"]==mes_nm,"Produccion"].values[0]) for p in PRODUCTOS}
-cap_rec  = {**CAPACIDAD_BASE,"horno":int(cap_horno)}
-factor_t = 0.80 if doble_turno else 1.0
-
-with st.spinner("🏭 Simulando planta de producción..."):
-    df_lotes,df_uso,df_sensores = run_simulacion_cached(
-        tuple(plan_mes.items()), tuple(cap_rec.items()), falla_horno, factor_t, int(semilla))
-
-df_kpis = calc_kpis(df_lotes, plan_mes)
-df_util  = calc_utilizacion(df_uso)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# KPIs SUPERIORES
-# ══════════════════════════════════════════════════════════════════════════════
-cum_avg  = df_kpis["Cumplimiento %"].mean() if not df_kpis.empty else 0
-util_max = df_util["Utilizacion_%"].max()   if not df_util.empty else 0
-lotes_n  = len(df_lotes) if not df_lotes.empty else 0
-temp_avg = df_sensores["temperatura"].mean() if not df_sensores.empty else 0
-excesos  = int((df_sensores["temperatura"]>200).sum()) if not df_sensores.empty else 0
-
-k1,k2,k3,k4,k5 = st.columns(5)
-def kpi_card(col, icon, val, lbl, sub=""):
-    col.markdown(f"""
-    <div class="kpi-card">
-      <div class="icon">{icon}</div>
-      <div class="val">{val}</div>
-      <div class="lbl">{lbl}</div>
-      {"<div class='sub'>"+sub+"</div>" if sub else ""}
-    </div>""", unsafe_allow_html=True)
-
-kpi_card(k1,"💰",f"${costo/1e6:.1f}M","Costo Óptimo","COP · Plan anual")
-kpi_card(k2,"📦",f"{lotes_n:,}","Lotes Simulados",MESES_F[mes_idx])
-kpi_card(k3,"✅",f"{cum_avg:.1f}%","Cumplimiento","Producción vs Plan")
-kpi_card(k4,"⚙️",f"{util_max:.0f}%","Util. Máx. Recurso",
-         "⚠️ Cuello botella" if util_max>=80 else "✓ OK")
-kpi_card(k5,"🌡️",f"{temp_avg:.0f}°C","Temp. Horno",
-         f"⚠️ {excesos} excesos >200°C" if excesos else "✓ Sin excesos")
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-PLOT_CFG = dict(template="plotly_white", font=dict(family="Plus Jakarta Sans"),
-                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,252,245,0.5)")
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TABS
-# ══════════════════════════════════════════════════════════════════════════════
-tabs = st.tabs(["📊 Demanda & Pronóstico","📋 Plan Agregado","📦 Desagregación","🏭 Simulación","🌡️ Sensores","🔬 Escenarios"])
-
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 1 — DEMANDA & PRONÓSTICO
-# ────────────────────────────────────────────────────────────────────────────
-with tabs[0]:
-    st.markdown('<div class="sec-title">📈 Demanda histórica y pronóstico por producto</div>', unsafe_allow_html=True)
-    st.markdown('<div class="info-box">Datos históricos anuales de la panadería Dora del Hoyo · Suavizado exponencial (α=0.3) para proyección futura. Las líneas punteadas son el pronóstico.</div>', unsafe_allow_html=True)
-
-    fig_pro = go.Figure()
-    for i, p in enumerate(PRODUCTOS):
-        serie=[v*factor_demanda for v in DEM_HISTORICA[p]]
-        suav, futuro = pronostico_simple(serie, meses_pronostico)
-        fig_pro.add_trace(go.Scatter(
-            x=MESES_ES, y=serie, mode="lines", name=PROD_LABELS[p],
-            line=dict(color=PROD_COLORS_DARK[p], width=2.2),
-            legendgroup=p, showlegend=True,
-        ))
-        meses_fut=[f"P+{j+1}" for j in range(meses_pronostico)]
-        x_fut=[MESES_ES[-1]]+meses_fut; y_fut=[suav[-1]]+futuro
-        fig_pro.add_trace(go.Scatter(
-            x=x_fut, y=y_fut, mode="lines+markers",
-            line=dict(color=PROD_COLORS_DARK[p], width=2, dash="dash"),
-            marker=dict(size=9, symbol="circle", color=PROD_COLORS[p],
-                        line=dict(color=PROD_COLORS_DARK[p],width=2)),
-            legendgroup=p, showlegend=False,
-        ))
-    # FIX: usar índice numérico en lugar de string categórico
-    fig_pro.add_vline(x=len(MESES_ES)-1, line_dash="dot", line_color="#C68B59",
-                      annotation_text="▶ Pronóstico", annotation_font_color="#C68B59",
-                      annotation_position="top right")
-    fig_pro.update_layout(
-        **PLOT_CFG, height=400,
-        title="Demanda Histórica & Proyección de Demanda — Dora del Hoyo",
-        xaxis_title="Mes", yaxis_title="Unidades",
-        legend=dict(orientation="h",y=-0.22,x=0.5,xanchor="center"),
-        xaxis=dict(showgrid=True,gridcolor="#F0E8D8"),
-        yaxis=dict(showgrid=True,gridcolor="#F0E8D8"),
-    )
-    st.plotly_chart(fig_pro, use_container_width=True)
-
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.markdown('<div class="sec-title">🔥 Mapa de calor — Estacionalidad</div>', unsafe_allow_html=True)
-        z=[[DEM_HISTORICA[p][i]*factor_demanda for i in range(12)] for p in PRODUCTOS]
-        fig_heat=go.Figure(go.Heatmap(
-            z=z, x=MESES_ES, y=[PROD_LABELS[p] for p in PRODUCTOS],
-            colorscale=[[0,"#FFF8EE"],[0.3,"#F9E4A0"],[0.65,"#F2C27A"],[1,"#C68B59"]],
-            hovertemplate="%{y}<br>%{x}: %{z:.0f} und<extra></extra>",
-            text=[[f"{int(v)}" for v in row] for row in z],
-            texttemplate="%{text}", textfont=dict(size=9,color="#3D1C02"),
-        ))
-        fig_heat.update_layout(**PLOT_CFG, height=240, margin=dict(t=20,b=10))
-        st.plotly_chart(fig_heat, use_container_width=True)
-
-    with col_b:
-        st.markdown('<div class="sec-title">🌸 Participación anual de ventas</div>', unsafe_allow_html=True)
-        totales={p:sum(DEM_HISTORICA[p]) for p in PRODUCTOS}
-        fig_pie=go.Figure(go.Pie(
-            labels=[PROD_LABELS[p] for p in PRODUCTOS],
-            values=list(totales.values()), hole=0.55,
-            marker=dict(colors=list(PROD_COLORS.values()), line=dict(color="white",width=3)),
-            textfont=dict(size=11),
-            hovertemplate="%{label}<br>%{value:,} und/año<br>%{percent}<extra></extra>",
-        ))
-        fig_pie.update_layout(
-            **PLOT_CFG, height=240, margin=dict(t=10,b=10),
-            annotations=[dict(text="<b>Ventas</b><br>anuales",x=0.5,y=0.5,
-                              font=dict(size=11,color="#3D1C02"),showarrow=False)],
-            legend=dict(orientation="v",x=1,y=0.5,font=dict(size=11)),
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-    st.markdown('<div class="sec-title">⏱️ Demanda total en Horas-Hombre por mes</div>', unsafe_allow_html=True)
-    dem_h_vals=demanda_horas_hombre(factor_demanda)
-    colores_hh=[C["caramel"] if i!=mes_idx else C["mocha"] for i in range(12)]
-    fig_hh=go.Figure()
-    fig_hh.add_trace(go.Bar(x=MESES_ES, y=list(dem_h_vals.values()),
-                            marker_color=colores_hh, marker_line_color="white", marker_line_width=1.5,
-                            hovertemplate="%{x}: %{y:.1f} H-H<extra></extra>", showlegend=False))
-    fig_hh.add_trace(go.Scatter(x=MESES_ES, y=list(dem_h_vals.values()), mode="lines+markers",
-                                line=dict(color=C["mocha"],width=2), marker=dict(size=6),
-                                showlegend=False))
-    fig_hh.update_layout(**PLOT_CFG, height=260, xaxis_title="Mes", yaxis_title="H-H",
-                         xaxis=dict(showgrid=False), yaxis=dict(gridcolor="#F0E8D8"),
-                         margin=dict(t=20,b=20))
-    st.plotly_chart(fig_hh, use_container_width=True)
-
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 2 — PLAN AGREGADO
-# ────────────────────────────────────────────────────────────────────────────
-with tabs[1]:
-    st.markdown('<div class="sec-title">📋 Planeación Agregada — Optimización Lineal (PuLP)</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="info-box"><b>{int(trab)} trabajadores</b> iniciales · {int(44*4*trab):,} H-H regulares/mes · '
-                f'CRt: ${crt:,} · COt: ${cot:,} · Ht: ${ht:,} COP</div>', unsafe_allow_html=True)
-
-    m1,m2,m3,m4 = st.columns(4)
-    m1.metric("💰 Costo Total", f"${costo:,.0f} COP")
-    m2.metric("⏰ Horas Extra", f"{df_agr['Horas_Extras'].sum():,.0f} H-H")
-    m3.metric("📉 Backlog Total", f"{df_agr['Backlog_HH'].sum():,.0f} H-H")
-    m4.metric("👥 Contrat. Netas", f"{df_agr['Contratacion'].sum()-df_agr['Despidos'].sum():+.0f} pers.")
-
-    st.markdown('<div class="sec-title">📊 Plan Agregado — Producción vs Demanda (H-H)</div>', unsafe_allow_html=True)
-    fig_agr=go.Figure()
-    fig_agr.add_trace(go.Bar(x=df_agr["Mes_ES"],y=df_agr["Inv_Ini_HH"],name="Inv. Inicial H-H",
-                             marker_color=C["sky"],opacity=0.8,marker_line_color="white",marker_line_width=1))
-    fig_agr.add_trace(go.Bar(x=df_agr["Mes_ES"],y=df_agr["Produccion_HH"],name="Producción H-H",
-                             marker_color=C["caramel"],opacity=0.9,marker_line_color="white",marker_line_width=1))
-    fig_agr.add_trace(go.Scatter(x=df_agr["Mes_ES"],y=df_agr["Demanda_HH"],mode="lines+markers",
-                                 name="Demanda H-H",line=dict(color=C["mocha"],dash="dash",width=2.5),
-                                 marker=dict(size=8,color=C["mocha"])))
-    fig_agr.add_trace(go.Scatter(x=df_agr["Mes_ES"],y=df_agr["Horas_Regulares"],mode="lines",
-                                 name="Cap. Regular",line=dict(color=C["rose"],dash="dot",width=2)))
-    fig_agr.update_layout(**PLOT_CFG,barmode="stack",height=370,
-                          title=f"Costo Óptimo LP: COP ${costo:,.0f}",
-                          xaxis_title="Mes",yaxis_title="Horas-Hombre",
-                          legend=dict(orientation="h",y=-0.22,x=0.5,xanchor="center"),
-                          xaxis=dict(showgrid=False),yaxis=dict(gridcolor="#F0E8D8"))
-    st.plotly_chart(fig_agr, use_container_width=True)
-
-    col1,col2 = st.columns(2)
-    with col1:
-        st.markdown('<div class="sec-title">👷 Fuerza laboral</div>', unsafe_allow_html=True)
-        fig_fl=go.Figure()
-        fig_fl.add_trace(go.Bar(x=df_agr["Mes_ES"],y=df_agr["Contratacion"],name="Contrataciones",
-                                marker_color=C["mint"],marker_line_color="white",marker_line_width=1))
-        fig_fl.add_trace(go.Bar(x=df_agr["Mes_ES"],y=df_agr["Despidos"],name="Despidos",
-                                marker_color=C["rose"],marker_line_color="white",marker_line_width=1))
-        fig_fl.update_layout(**PLOT_CFG,barmode="group",height=290,
-                             legend=dict(orientation="h",y=-0.3,x=0.5,xanchor="center"),
-                             xaxis=dict(showgrid=False),yaxis=dict(gridcolor="#F0E8D8"))
-        st.plotly_chart(fig_fl, use_container_width=True)
-
-    with col2:
-        st.markdown('<div class="sec-title">⚡ Horas Extra & Backlog</div>', unsafe_allow_html=True)
-        fig_ex=go.Figure()
-        fig_ex.add_trace(go.Bar(x=df_agr["Mes_ES"],y=df_agr["Horas_Extras"],name="Horas Extra",
-                                marker_color=C["butter"],marker_line_color="white",marker_line_width=1))
-        fig_ex.add_trace(go.Bar(x=df_agr["Mes_ES"],y=df_agr["Backlog_HH"],name="Backlog",
-                                marker_color=C["rose"],marker_line_color="white",marker_line_width=1))
-        fig_ex.update_layout(**PLOT_CFG,barmode="group",height=290,
-                             legend=dict(orientation="h",y=-0.3,x=0.5,xanchor="center"),
-                             xaxis=dict(showgrid=False),yaxis=dict(gridcolor="#F0E8D8"))
-        st.plotly_chart(fig_ex, use_container_width=True)
-
-    with st.expander("📄 Ver tabla completa del plan"):
-        df_show=df_agr.drop(columns=["Mes","Mes_ES"]).rename(columns={"Mes_F":"Mes"})
-        st.dataframe(df_show.style.format({c:"{:,.1f}" for c in df_show.columns if c!="Mes"})
-                     .background_gradient(subset=["Produccion_HH","Horas_Extras"],cmap="YlOrBr"),
-                     use_container_width=True)
-
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 3 — DESAGREGACIÓN
-# ────────────────────────────────────────────────────────────────────────────
-with tabs[2]:
-    st.markdown('<div class="sec-title">📦 Desagregación del plan en unidades por producto</div>', unsafe_allow_html=True)
-    st.markdown('<div class="info-box">El plan en H-H se convierte en unidades por producto mediante LP. La ★ marca el mes seleccionado para simulación.</div>', unsafe_allow_html=True)
-
-    mes_resaltar=st.selectbox("Mes a resaltar ★",range(12),index=mes_idx,
-                               format_func=lambda i:MESES_F[i],key="mes_desag")
-    mes_nm_desag=MESES[mes_resaltar]
-
-    fig_des=make_subplots(rows=3,cols=2,subplot_titles=[PROD_LABELS[p] for p in PRODUCTOS],
-                          vertical_spacing=0.12,horizontal_spacing=0.08)
-    for idx,p in enumerate(PRODUCTOS):
-        r,c=idx//2+1,idx%2+1; df_p=desag[p]
-        fig_des.add_trace(go.Bar(x=df_p["Mes_ES"],y=df_p["Produccion"],
-                                 marker_color=PROD_COLORS[p],opacity=0.9,showlegend=False,
-                                 marker_line_color="white",marker_line_width=1,
-                                 hovertemplate="%{x}: %{y:.0f} und<extra></extra>"),row=r,col=c)
-        fig_des.add_trace(go.Scatter(x=df_p["Mes_ES"],y=df_p["Demanda"],mode="lines+markers",
-                                     line=dict(color=PROD_COLORS_DARK[p],dash="dash",width=1.5),
-                                     marker=dict(size=5),showlegend=False),row=r,col=c)
-        mes_row=df_p[df_p["Mes"]==mes_nm_desag]
-        if not mes_row.empty:
-            fig_des.add_trace(go.Scatter(x=[MESES_ES[mes_resaltar]],y=[mes_row["Produccion"].values[0]],
-                                         mode="markers",marker=dict(size=14,color=C["mocha"],symbol="star"),
-                                         showlegend=False),row=r,col=c)
-    fig_des.update_layout(**PLOT_CFG,height=680,barmode="group",
-                          title="Producción planificada vs Demanda por producto (unidades/mes)",
-                          margin=dict(t=60))
-    for i in range(1,4):
-        for j in range(1,3):
-            fig_des.update_xaxes(showgrid=False,row=i,col=j)
-            fig_des.update_yaxes(gridcolor="#F0E8D8",row=i,col=j)
-    st.plotly_chart(fig_des, use_container_width=True)
-
-    st.markdown('<div class="sec-title">🎯 Cobertura de demanda anual</div>', unsafe_allow_html=True)
-    prods_c,cob_vals,und_prod,und_dem=[],[],[],[]
-    for p in PRODUCTOS:
-        df_p=desag[p]; tot_p=df_p["Produccion"].sum(); tot_d=df_p["Demanda"].sum()
-        cob=round(min(tot_p/max(tot_d,1)*100,100),1)
-        prods_c.append(PROD_LABELS[p]); cob_vals.append(cob)
-        und_prod.append(int(tot_p)); und_dem.append(int(tot_d))
-
-    col_cob1,col_cob2=st.columns([2,1])
-    with col_cob1:
-        fig_cob=go.Figure()
-        fig_cob.add_trace(go.Bar(y=prods_c,x=cob_vals,orientation="h",
-                                  marker=dict(color=list(PROD_COLORS.values()),line=dict(color="white",width=2)),
-                                  text=[f"{v:.1f}%" for v in cob_vals],textposition="inside",
-                                  textfont=dict(color="#3D1C02",size=12),
-                                  hovertemplate="%{y}: %{x:.1f}%<extra></extra>"))
-        fig_cob.add_vline(x=100,line_dash="dash",line_color=C["mocha"],
-                          annotation_text="Meta 100%",annotation_font_color=C["mocha"])
-        fig_cob.update_layout(**PLOT_CFG,height=270,xaxis_title="Cobertura (%)",
-                              xaxis=dict(range=[0,115]),yaxis=dict(showgrid=False),
-                              margin=dict(t=20,b=20),showlegend=False)
-        st.plotly_chart(fig_cob, use_container_width=True)
-    with col_cob2:
-        df_cob=pd.DataFrame({"Producto":prods_c,"Producido":und_prod,"Demanda":und_dem,"Cob %":cob_vals})
-        st.dataframe(df_cob.style.format({"Producido":"{:,.0f}","Demanda":"{:,.0f}","Cob %":"{:.1f}%"})
-                     .background_gradient(subset=["Cob %"],cmap="YlGn"),
-                     use_container_width=True,height=270)
-
-    st.markdown('<div class="sec-title">📦 Inventario final proyectado</div>', unsafe_allow_html=True)
-    fig_inv=go.Figure()
-    for p in PRODUCTOS:
-        # FIX: usar hex_rgba en lugar de hex+"28"
-        fig_inv.add_trace(go.Scatter(x=desag[p]["Mes_ES"],y=desag[p]["Inv_Fin"],
-                                     name=PROD_LABELS[p],mode="lines+markers",
-                                     line=dict(color=PROD_COLORS_DARK[p],width=2),
-                                     marker=dict(size=7,color=PROD_COLORS[p],
-                                                 line=dict(color=PROD_COLORS_DARK[p],width=1.5)),
-                                     fill="tozeroy",fillcolor=hex_rgba(PROD_COLORS[p],0.16)))
-    fig_inv.update_layout(**PLOT_CFG,height=280,xaxis_title="Mes",yaxis_title="Unidades en inventario",
-                          legend=dict(orientation="h",y=-0.28,x=0.5,xanchor="center"),
-                          xaxis=dict(showgrid=False),yaxis=dict(gridcolor="#F0E8D8"))
-    st.plotly_chart(fig_inv, use_container_width=True)
-
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 4 — SIMULACIÓN
-# ────────────────────────────────────────────────────────────────────────────
-with tabs[3]:
-    st.markdown(f'<div class="sec-title">🏭 Simulación de Planta — {MESES_F[mes_idx]}</div>', unsafe_allow_html=True)
-    st.markdown('<div class="info-box">Simulación SimPy · Rutas: Mezclado → Dosificado/Moldeado → Horneado → Enfriamiento → Empaque · Tiempos estocásticos por producto.</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="sec-title">🗓️ Plan del mes (unidades a producir)</div>', unsafe_allow_html=True)
-    cols_p=st.columns(5)
-    EMOJIS={"Brownies":"🍫","Mantecadas":"🧁","Mantecadas_Amapola":"🌸","Torta_Naranja":"🍊","Pan_Maiz":"🌽"}
-    for i,(p,u) in enumerate(plan_mes.items()):
-        with cols_p[i]:
-            hh_req=round(u*HORAS_PRODUCTO[p],1)
-            st.markdown(f"""
-            <div class="kpi-card" style="background:{PROD_COLORS[p]}35;border-color:{PROD_COLORS_DARK[p]}50">
-              <div class="icon">{EMOJIS[p]}</div>
-              <div class="val" style="font-size:1.5rem">{u:,}</div>
-              <div class="lbl">{PROD_LABELS[p]}</div>
-              <div class="sub">{hh_req} H-H</div>
-            </div>""", unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    if not df_kpis.empty:
-        st.markdown('<div class="sec-title">✅ Cumplimiento del plan por producto</div>', unsafe_allow_html=True)
-        fig_cum=go.Figure()
-        for i,row in df_kpis.iterrows():
-            p_key=[p for p in PRODUCTOS if PROD_LABELS[p]==row["Producto"]]
-            p_key=p_key[0] if p_key else PRODUCTOS[i%len(PRODUCTOS)]
-            fig_cum.add_trace(go.Bar(
-                x=[row["Cumplimiento %"]], y=[row["Producto"]], orientation="h",
-                marker=dict(color=PROD_COLORS[p_key], line=dict(color=PROD_COLORS_DARK[p_key],width=1.5)),
-                text=f"{row['Cumplimiento %']:.1f}%", textposition="inside",
-                textfont=dict(color="#3D1C02",size=12), showlegend=False,
-                hovertemplate=f"<b>{row['Producto']}</b><br>Prod: {row['Und Producidas']:,.0f}<br>Plan: {row['Plan']:,.0f}<extra></extra>",
-            ))
-        fig_cum.add_vline(x=100,line_dash="dash",line_color=C["mocha"],annotation_text="Meta 100%")
-        fig_cum.update_layout(**PLOT_CFG,height=250,xaxis=dict(range=[0,115]),
-                              yaxis=dict(showgrid=False),xaxis_title="Cumplimiento (%)",
-                              margin=dict(t=20,b=20),title="Cumplimiento del Plan por Producto")
-        st.plotly_chart(fig_cum, use_container_width=True)
-
-        col_t1,col_t2=st.columns(2)
-        with col_t1:
-            st.markdown('<div class="sec-title">⚡ Throughput (und/h)</div>', unsafe_allow_html=True)
-            prods_kpi=[PROD_LABELS[p] for p in PRODUCTOS if PROD_LABELS[p] in df_kpis["Producto"].values]
-            colores_kpi=[PROD_COLORS[p] for p in PRODUCTOS if PROD_LABELS[p] in df_kpis["Producto"].values]
-            fig_tp=go.Figure(go.Bar(
-                x=prods_kpi, y=df_kpis["Throughput (und/h)"].values,
-                marker_color=colores_kpi, marker_line_color="white", marker_line_width=2,
-                text=[f"{v:.1f}" for v in df_kpis["Throughput (und/h)"].values], textposition="outside",
-            ))
-            fig_tp.update_layout(**PLOT_CFG,height=270,yaxis_title="und/h",showlegend=False,
-                                 xaxis=dict(showgrid=False),yaxis=dict(gridcolor="#F0E8D8"),margin=dict(t=40))
-            st.plotly_chart(fig_tp, use_container_width=True)
-
-        with col_t2:
-            st.markdown('<div class="sec-title">⏱️ Lead Time (min/lote)</div>', unsafe_allow_html=True)
-            fig_lt=go.Figure(go.Bar(
-                x=prods_kpi, y=df_kpis["Lead Time (min/lote)"].values,
-                marker_color=[PROD_COLORS_DARK[p] for p in PRODUCTOS if PROD_LABELS[p] in df_kpis["Producto"].values],
-                marker_line_color="white", marker_line_width=2,
-                text=[f"{v:.0f}" for v in df_kpis["Lead Time (min/lote)"].values], textposition="outside",
-            ))
-            fig_lt.update_layout(**PLOT_CFG,height=270,yaxis_title="min/lote",showlegend=False,
-                                 xaxis=dict(showgrid=False),yaxis=dict(gridcolor="#F0E8D8"),margin=dict(t=40))
-            st.plotly_chart(fig_lt, use_container_width=True)
-
-    if not df_util.empty:
-        st.markdown('<div class="sec-title">⚙️ Utilización de Recursos & Cuellos de Botella</div>', unsafe_allow_html=True)
-        cuellos=df_util[df_util["Cuello Botella"]]
-        if not cuellos.empty:
-            for _,row in cuellos.iterrows():
-                st.markdown(f'<div class="pill-warn">⚠️ Cuello: <b>{row["Recurso"]}</b> — {row["Utilizacion_%"]:.1f}% · Cola prom: {row["Cola Prom"]:.2f}</div><br>',unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="pill-ok">✅ Sin cuellos de botella detectados</div><br>',unsafe_allow_html=True)
-
-        REC_LABELS={"mezcla":"🥣 Mezcla","dosificado":"🔧 Dosificado","horno":"🔥 Horno",
-                    "enfriamiento":"❄️ Enfriamiento","empaque":"📦 Empaque","amasado":"👐 Amasado"}
-        rec_lb=[REC_LABELS.get(r,r) for r in df_util["Recurso"]]
-        col_util=[C["rose"] if u>=80 else C["butter"] if u>=60 else C["mint"] for u in df_util["Utilizacion_%"]]
-        fig_util_g=make_subplots(rows=1,cols=2,subplot_titles=["Utilización (%)","Cola Promedio"])
-        fig_util_g.add_trace(go.Bar(x=rec_lb,y=df_util["Utilizacion_%"],marker_color=col_util,
-                                    marker_line_color="white",marker_line_width=2,
-                                    text=[f"{v:.0f}%" for v in df_util["Utilizacion_%"]],
-                                    textposition="outside",showlegend=False),row=1,col=1)
-        fig_util_g.add_trace(go.Bar(x=rec_lb,y=df_util["Cola Prom"],marker_color=C["lavender"],
-                                    marker_line_color="white",marker_line_width=2,
-                                    text=[f"{v:.2f}" for v in df_util["Cola Prom"]],
-                                    textposition="outside",showlegend=False),row=1,col=2)
-        fig_util_g.add_hline(y=80,line_dash="dash",line_color=C["rose"],annotation_text="⚠ 80%",row=1,col=1)
-        fig_util_g.update_layout(**PLOT_CFG,height=310)
-        fig_util_g.update_xaxes(showgrid=False); fig_util_g.update_yaxes(gridcolor="#F0E8D8")
-        st.plotly_chart(fig_util_g, use_container_width=True)
-
-    if not df_lotes.empty:
-        st.markdown('<div class="sec-title">📅 Diagrama de Gantt — Flujo de lotes de producción</div>', unsafe_allow_html=True)
-        n_gantt=min(60,len(df_lotes)); sub=df_lotes.head(n_gantt).reset_index(drop=True)
-        fig_gantt=go.Figure()
-        for _,row in sub.iterrows():
-            fig_gantt.add_trace(go.Bar(
-                x=[row["tiempo_sistema"]],y=[row["lote_id"]],base=[row["t_creacion"]],
-                orientation="h",marker_color=PROD_COLORS.get(row["producto"],"#ccc"),
-                opacity=0.85,showlegend=False,marker_line_color="white",marker_line_width=0.5,
-                hovertemplate=(f"<b>{PROD_LABELS.get(row['producto'],row['producto'])}</b><br>"
-                               f"Inicio: {row['t_creacion']:.0f} min<br>Duración: {row['tiempo_sistema']:.1f} min<extra></extra>"),
-            ))
-        for p,c in PROD_COLORS.items():
-            fig_gantt.add_trace(go.Bar(x=[None],y=[None],marker_color=c,name=PROD_LABELS[p]))
-        fig_gantt.update_layout(**PLOT_CFG,barmode="overlay",height=max(370,n_gantt*8),
-                                title=f"Gantt — Primeros {n_gantt} lotes",xaxis_title="Tiempo simulado (min)",
-                                legend=dict(orientation="h",y=-0.1,x=0.5,xanchor="center"),
-                                yaxis=dict(showticklabels=False))
-        st.plotly_chart(fig_gantt, use_container_width=True)
-
-        st.markdown('<div class="sec-title">🎻 Distribución de tiempos en sistema por producto</div>', unsafe_allow_html=True)
-        fig_violin=go.Figure()
-        for p in PRODUCTOS:
-            sub_v=df_lotes[df_lotes["producto"]==p]["tiempo_sistema"]
-            if len(sub_v)<3: continue
-            fig_violin.add_trace(go.Violin(y=sub_v,name=PROD_LABELS[p],box_visible=True,
-                                           meanline_visible=True,fillcolor=PROD_COLORS[p],
-                                           line_color=PROD_COLORS_DARK[p],opacity=0.8))
-        fig_violin.update_layout(**PLOT_CFG,height=310,yaxis_title="Tiempo en sistema (min)",
-                                 showlegend=False,violinmode="overlay")
-        st.plotly_chart(fig_violin, use_container_width=True)
-
-        with st.expander("📊 Ver tabla completa de KPIs"):
-            if not df_kpis.empty:
-                st.dataframe(df_kpis.style.format({c:"{:,.2f}" for c in df_kpis.columns if c!="Producto"})
-                             .background_gradient(subset=["Cumplimiento %"],cmap="YlGn"),
-                             use_container_width=True)
-
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 5 — SENSORES
-# ────────────────────────────────────────────────────────────────────────────
-with tabs[4]:
-    st.markdown('<div class="sec-title">🌡️ Sensores Virtuales — Monitor del Horno</div>', unsafe_allow_html=True)
-    st.markdown('<div class="info-box">El gemelo digital simula sensores IoT del horno de la panadería: temperatura en tiempo real, ocupación y alertas de exceso térmico. Límite operativo: 200°C.</div>', unsafe_allow_html=True)
-
-    if not df_sensores.empty:
-        s1,s2,s3,s4=st.columns(4)
-        s1.metric("🌡️ Temp. mínima",  f"{df_sensores['temperatura'].min():.1f} °C")
-        s2.metric("🔥 Temp. máxima",  f"{df_sensores['temperatura'].max():.1f} °C")
-        s3.metric("📊 Temp. promedio",f"{df_sensores['temperatura'].mean():.1f} °C")
-        s4.metric("⚠️ Excesos >200°C",excesos,
-                  delta="Revisar horno" if excesos else "Operación normal",
-                  delta_color="inverse" if excesos else "off")
-
-        fig_temp=go.Figure()
-        # FIX: usar hex_rgba en lugar de hex+"35" y hex+"22"
-        fig_temp.add_hrect(y0=150,y1=200,fillcolor=hex_rgba(C["mint"],0.21),line_width=0,
-                           annotation_text="Zona operativa óptima",annotation_font_color=C["sage"])
-        fig_temp.add_trace(go.Scatter(x=df_sensores["tiempo"],y=df_sensores["temperatura"],
-                                      mode="lines",name="Temperatura",fill="tozeroy",
-                                      fillcolor=hex_rgba(C["peach"],0.13),
-                                      line=dict(color=C["mocha"],width=1.8)))
-        if len(df_sensores)>10:
-            mm=df_sensores["temperatura"].rolling(5,min_periods=1).mean()
-            fig_temp.add_trace(go.Scatter(x=df_sensores["tiempo"],y=mm,mode="lines",
-                                          name="Media móvil",line=dict(color=C["rose"],width=2,dash="dot")))
-        fig_temp.add_hline(y=200,line_dash="dash",line_color="#C0392B",
-                           annotation_text="⚠ Límite 200°C",annotation_font_color="#C0392B")
-        fig_temp.update_layout(**PLOT_CFG,height=310,xaxis_title="Tiempo simulado (min)",
-                               yaxis_title="°C",title="Temperatura del Horno — Tiempo Real Simulado",
-                               legend=dict(orientation="h",y=-0.22,x=0.5,xanchor="center"),
-                               xaxis=dict(showgrid=False),yaxis=dict(gridcolor="#F0E8D8"))
-        st.plotly_chart(fig_temp, use_container_width=True)
-
-        col_s1,col_s2=st.columns(2)
-        with col_s1:
-            fig_ocup=go.Figure()
-            fig_ocup.add_trace(go.Scatter(x=df_sensores["tiempo"],y=df_sensores["horno_ocup"],
-                                          mode="lines",fill="tozeroy",fillcolor=hex_rgba(C["sky"],0.25),
-                                          line=dict(color="#4A90C4",width=2),name="Ocupación"))
-            fig_ocup.add_hline(y=cap_horno,line_dash="dot",line_color=C["mocha"],
-                               annotation_text=f"Cap. máx: {cap_horno}")
-            fig_ocup.update_layout(**PLOT_CFG,height=250,title="Ocupación del Horno",
-                                   xaxis_title="min",yaxis_title="Estaciones activas",
-                                   xaxis=dict(showgrid=False),yaxis=dict(gridcolor="#F0E8D8"),
-                                   showlegend=False)
-            st.plotly_chart(fig_ocup, use_container_width=True)
-
-        with col_s2:
-            fig_hist=go.Figure()
-            fig_hist.add_trace(go.Histogram(x=df_sensores["temperatura"],nbinsx=35,
-                                            marker_color=C["caramel"],opacity=0.85,
-                                            marker_line_color="white",marker_line_width=1))
-            fig_hist.add_vline(x=200,line_dash="dash",line_color="#C0392B",annotation_text="200°C")
-            fig_hist.add_vline(x=df_sensores["temperatura"].mean(),line_dash="dot",
-                               line_color=C["mocha"],
-                               annotation_text=f"Prom:{df_sensores['temperatura'].mean():.0f}°C")
-            fig_hist.update_layout(**PLOT_CFG,height=250,title="Distribución de Temperatura",
-                                   xaxis_title="°C",yaxis_title="Frecuencia",showlegend=False,
-                                   xaxis=dict(showgrid=False),yaxis=dict(gridcolor="#F0E8D8"))
-            st.plotly_chart(fig_hist, use_container_width=True)
-    else:
-        st.info("Sin datos de sensores.")
-
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 6 — ESCENARIOS WHAT-IF
-# ────────────────────────────────────────────────────────────────────────────
-with tabs[5]:
-    st.markdown('<div class="sec-title">🔬 Análisis de Escenarios What-If</div>', unsafe_allow_html=True)
-    st.markdown('<div class="info-box">Compara múltiples configuraciones de planta para identificar la estrategia óptima de producción en la panadería Dora del Hoyo.</div>', unsafe_allow_html=True)
-
-    ESCENARIOS_DEF={
-        "Base":               {"fd":1.0,"falla":False,"ft":1.0, "cap_delta":0},
-        "Demanda +20%":       {"fd":1.2,"falla":False,"ft":1.0, "cap_delta":0},
-        "Demanda −20%":       {"fd":0.8,"falla":False,"ft":1.0, "cap_delta":0},
-        "Falla en horno":     {"fd":1.0,"falla":True, "ft":1.0, "cap_delta":0},
-        "Capacidad reducida": {"fd":1.0,"falla":False,"ft":1.0, "cap_delta":-1},
-        "Capacidad ampliada": {"fd":1.0,"falla":False,"ft":1.0, "cap_delta":+1},
-        "Doble turno":        {"fd":1.0,"falla":False,"ft":0.80,"cap_delta":0},
-        "Optimizado":         {"fd":1.0,"falla":False,"ft":0.85,"cap_delta":+1},
+def human_hour_demand(multiplier: float = 1.0) -> dict:
+    return {
+        month: round(sum(HIST_DEMAND[p][i] * HOURS_PER_UNIT[p] for p in PRODUCTS) * multiplier, 2)
+        for i, month in enumerate(MONTHS_EN)
     }
-    ESC_ICONS={"Base":"🏠","Demanda +20%":"📈","Demanda −20%":"📉","Falla en horno":"⚠️",
-               "Capacidad reducida":"⬇️","Capacidad ampliada":"⬆️","Doble turno":"🕐","Optimizado":"🚀"}
 
-    escenarios_sel=st.multiselect("Selecciona escenarios a comparar",
-                                   list(ESCENARIOS_DEF.keys()),
-                                   default=["Base","Demanda +20%","Falla en horno","Doble turno","Optimizado"])
 
-    if st.button("🚀 Comparar escenarios seleccionados",type="primary"):
-        filas_esc=[]; prog=st.progress(0)
-        for i,nm in enumerate(escenarios_sel):
-            prog.progress((i+1)/len(escenarios_sel),text=f"Simulando: {nm}...")
-            cfg=ESCENARIOS_DEF[nm]
-            plan_esc={p:max(int(u*cfg["fd"]),0) for p,u in plan_mes.items()}
-            cap_esc={**CAPACIDAD_BASE,"horno":max(cap_horno+cfg["cap_delta"],1)}
-            df_l,df_u,_=run_simulacion_cached(
-                tuple(plan_esc.items()),tuple(cap_esc.items()),cfg["falla"],cfg["ft"],int(semilla))
-            k=calc_kpis(df_l,plan_esc); u=calc_utilizacion(df_u)
-            fila={"Escenario":ESC_ICONS.get(nm,"")+" "+nm}
-            if not k.empty:
-                fila["Throughput (und/h)"]=round(k["Throughput (und/h)"].mean(),2)
-                fila["Lead Time (min)"]   =round(k["Lead Time (min/lote)"].mean(),2)
-                fila["WIP Prom"]          =round(k["WIP Prom"].mean(),2)
-                fila["Cumplimiento %"]    =round(k["Cumplimiento %"].mean(),2)
-            if not u.empty:
-                fila["Util. max %"]    =round(u["Utilizacion_%"].max(),2)
-                fila["Cuellos botella"]=int(u["Cuello Botella"].sum())
-            fila["Lotes prod."]=len(df_l)
-            filas_esc.append(fila)
-        prog.empty()
-        df_comp=pd.DataFrame(filas_esc)
+def smooth_forecast(series, steps=4, alpha=0.35):
+    level = series[0]
+    smoothed = []
+    for value_ in series:
+        level = alpha * value_ + (1 - alpha) * level
+        smoothed.append(level)
+    trend = (smoothed[-1] - smoothed[-4]) / 3 if len(smoothed) >= 4 else 0
+    projection = []
+    current = smoothed[-1]
+    for _ in range(steps):
+        current += trend * alpha
+        projection.append(round(current, 1))
+    return smoothed, projection
 
-        st.markdown('<div class="sec-title">📊 Resultados comparativos</div>', unsafe_allow_html=True)
-        num_cols=[c for c in df_comp.columns if c not in ["Escenario"] and df_comp[c].dtype!="object"]
-        st.dataframe(df_comp.style.format({c:"{:,.2f}" for c in num_cols})
-                     .background_gradient(subset=["Cumplimiento %"] if "Cumplimiento %" in df_comp.columns else [],
-                                          cmap="YlGn"),
-                     use_container_width=True)
 
-        if len(df_comp)>1:
-            col_e1,col_e2=st.columns(2)
-            with col_e1:
-                st.markdown('<div class="sec-title">✅ Cumplimiento por escenario</div>', unsafe_allow_html=True)
-                if "Cumplimiento %" in df_comp.columns:
-                    col_c=[C["mint"] if v>=90 else C["butter"] if v>=70 else C["rose"] for v in df_comp["Cumplimiento %"]]
-                    fig_ec=go.Figure(go.Bar(x=df_comp["Escenario"],y=df_comp["Cumplimiento %"],
-                                           marker_color=col_c,marker_line_color="white",marker_line_width=2,
-                                           text=[f"{v:.1f}%" for v in df_comp["Cumplimiento %"]],textposition="outside"))
-                    fig_ec.add_hline(y=100,line_dash="dash",line_color=C["mocha"])
-                    fig_ec.update_layout(**PLOT_CFG,height=290,yaxis_title="%",showlegend=False,
-                                         xaxis=dict(showgrid=False,tickangle=-25),yaxis=dict(gridcolor="#F0E8D8"),
-                                         margin=dict(t=30,b=80))
-                    st.plotly_chart(fig_ec, use_container_width=True)
+@st.cache_data(show_spinner=False)
+def aggregate_plan(demand_factor=1.0, settings_tuple=None):
+    cfg = BASE_SETTINGS.copy()
+    if settings_tuple:
+        cfg.update(dict(settings_tuple))
 
-            with col_e2:
-                st.markdown('<div class="sec-title">⚙️ Utilización máxima</div>', unsafe_allow_html=True)
-                if "Util. max %" in df_comp.columns:
-                    col_u=[C["rose"] if v>=80 else C["butter"] if v>=60 else C["mint"] for v in df_comp["Util. max %"]]
-                    fig_eu=go.Figure(go.Bar(x=df_comp["Escenario"],y=df_comp["Util. max %"],
-                                           marker_color=col_u,marker_line_color="white",marker_line_width=2,
-                                           text=[f"{v:.0f}%" for v in df_comp["Util. max %"]],textposition="outside"))
-                    fig_eu.add_hline(y=80,line_dash="dash",line_color=C["rose"],annotation_text="⚠ 80%")
-                    fig_eu.update_layout(**PLOT_CFG,height=290,yaxis_title="%",showlegend=False,
-                                         xaxis=dict(showgrid=False,tickangle=-25),yaxis=dict(gridcolor="#F0E8D8"),
-                                         margin=dict(t=30,b=80))
-                    st.plotly_chart(fig_eu, use_container_width=True)
+    demand_hh = human_hour_demand(demand_factor)
+    model = LpProblem("planificacion_agregada", LpMinimize)
 
-            # Radar chart
-            st.markdown('<div class="sec-title">🕸️ Radar comparativo de escenarios</div>', unsafe_allow_html=True)
-            cols_radar=[c for c in df_comp.columns if c not in ["Escenario","Cuellos botella"]
-                        and df_comp[c].dtype!="object"]
-            if len(cols_radar)>=3:
-                df_norm=df_comp[cols_radar].copy()
-                for c in df_norm.columns:
-                    rng=df_norm[c].max()-df_norm[c].min()
-                    df_norm[c]=(df_norm[c]-df_norm[c].min())/rng if rng else 0.5
+    prod = LpVariable.dicts("Prod", MONTHS_EN, lowBound=0)
+    inv = LpVariable.dicts("Inv", MONTHS_EN, lowBound=0)
+    backlog = LpVariable.dicts("Bkl", MONTHS_EN, lowBound=0)
+    regular = LpVariable.dicts("Reg", MONTHS_EN, lowBound=0)
+    overtime = LpVariable.dicts("Over", MONTHS_EN, lowBound=0)
+    undertime = LpVariable.dicts("Under", MONTHS_EN, lowBound=0)
+    net = LpVariable.dicts("Net", MONTHS_EN)
+    hire = LpVariable.dicts("Hire", MONTHS_EN, lowBound=0)
+    fire = LpVariable.dicts("Fire", MONTHS_EN, lowBound=0)
 
-                COLORES_R=[C["caramel"],C["sky"],C["rose"],C["mint"],C["lavender"],C["peach"],C["butter"],C["sage"]]
-                RGBA_R=[
-                    hex_rgba(C["caramel"],0.15), hex_rgba(C["sky"],0.15),
-                    hex_rgba(C["rose"],0.15),    hex_rgba(C["mint"],0.15),
-                    hex_rgba(C["lavender"],0.15),hex_rgba(C["peach"],0.15),
-                    hex_rgba(C["butter"],0.15),  hex_rgba(C["sage"],0.15),
-                ]
+    model += lpSum(
+        cfg["Ct"] * prod[m] + cfg["Ht"] * inv[m] + cfg["PIt"] * backlog[m] +
+        cfg["CRt"] * regular[m] + cfg["COt"] * overtime[m] +
+        cfg["CW_plus"] * hire[m] + cfg["CW_minus"] * fire[m]
+        for m in MONTHS_EN
+    )
 
-                fig_radar=go.Figure()
-                for i,row in df_comp.iterrows():
-                    vals=[df_norm.loc[i,c] for c in cols_radar]
-                    fig_radar.add_trace(go.Scatterpolar(
-                        r=vals+[vals[0]], theta=cols_radar+[cols_radar[0]],
-                        fill="toself", name=row["Escenario"],
-                        line=dict(color=COLORES_R[i%len(COLORES_R)],width=2),
-                        fillcolor=RGBA_R[i%len(RGBA_R)],
-                    ))
-                fig_radar.update_layout(
-                    **PLOT_CFG, height=430,
-                    polar=dict(radialaxis=dict(visible=True,range=[0,1],gridcolor="#E8D5B0",linecolor="#E8D5B0"),
-                               angularaxis=dict(gridcolor="#E8D5B0")),
-                    title="Comparación normalizada de escenarios",
-                    legend=dict(orientation="h",y=-0.15,x=0.5,xanchor="center"),
-                )
-                st.plotly_chart(fig_radar, use_container_width=True)
+    for i, month in enumerate(MONTHS_EN):
+        prev = MONTHS_EN[i - 1] if i > 0 else None
+        d = demand_hh[month]
+        if i == 0:
+            model += net[month] == prod[month] - d
+            model += regular[month] == cfg["LR_initial"] + hire[month] - fire[month]
+        else:
+            model += net[month] == net[prev] + prod[month] - d
+            model += regular[month] == regular[prev] + hire[month] - fire[month]
+        model += net[month] == inv[month] - backlog[month]
+        model += undertime[month] + overtime[month] == cfg["M"] * prod[month]
+        model += undertime[month] <= regular[month]
+
+    model.solve(PULP_CBC_CMD(msg=False))
+
+    opening, closing = [], []
+    for i, m in enumerate(MONTHS_EN):
+        ini = 0 if i == 0 else closing[-1]
+        fin = ini + (prod[m].varValue or 0) - demand_hh[m]
+        opening.append(round(ini, 2))
+        closing.append(round(fin, 2))
+
+    out = pd.DataFrame({
+        "Mes": MONTHS_EN,
+        "Mes_ES": MONTHS_ES,
+        "Mes_Full": MONTHS_FULL,
+        "Demanda_HH": [round(demand_hh[m], 2) for m in MONTHS_EN],
+        "Produccion_HH": [round(prod[m].varValue or 0, 2) for m in MONTHS_EN],
+        "Inventario_HH": [round(inv[m].varValue or 0, 2) for m in MONTHS_EN],
+        "Backlog_HH": [round(backlog[m].varValue or 0, 2) for m in MONTHS_EN],
+        "Horas_Regulares": [round(regular[m].varValue or 0, 2) for m in MONTHS_EN],
+        "Horas_Extra": [round(overtime[m].varValue or 0, 2) for m in MONTHS_EN],
+        "Apertura_HH": opening,
+        "Cierre_HH": closing,
+        "Contrata": [round(hire[m].varValue or 0, 2) for m in MONTHS_EN],
+        "Despide": [round(fire[m].varValue or 0, 2) for m in MONTHS_EN],
+    })
+    return out, value(model.objective)
+
+
+@st.cache_data(show_spinner=False)
+def product_breakdown(monthly_hh_items, factor=1.0, cost_prod=1.0, cost_inv=1.0):
+    capacity = dict(monthly_hh_items)
+    model = LpProblem("desglose_productos", LpMinimize)
+
+    x = {(p, m): LpVariable(f"X_{p}_{m}", lowBound=0) for p in PRODUCTS for m in MONTHS_EN}
+    inv = {(p, m): LpVariable(f"I_{p}_{m}", lowBound=0) for p in PRODUCTS for m in MONTHS_EN}
+    bkl = {(p, m): LpVariable(f"S_{p}_{m}", lowBound=0) for p in PRODUCTS for m in MONTHS_EN}
+
+    model += lpSum(cost_inv * 100000 * inv[p, m] + cost_prod * 150000 * bkl[p, m] for p in PRODUCTS for m in MONTHS_EN)
+
+    for i, month in enumerate(MONTHS_EN):
+        prev = MONTHS_EN[i - 1] if i > 0 else None
+        model += lpSum(HOURS_PER_UNIT[p] * x[p, month] for p in PRODUCTS) <= capacity[month]
+        for p in PRODUCTS:
+            demand = int(HIST_DEMAND[p][i] * factor)
+            if i == 0:
+                model += inv[p, month] - bkl[p, month] == INITIAL_STOCK[p] + x[p, month] - demand
+            else:
+                model += inv[p, month] - bkl[p, month] == inv[p, prev] - bkl[p, prev] + x[p, month] - demand
+
+    model.solve(PULP_CBC_CMD(msg=False))
+
+    result = {}
+    for p in PRODUCTS:
+        rows = []
+        for i, month in enumerate(MONTHS_EN):
+            prev_stock = INITIAL_STOCK[p] if i == 0 else round(inv[p, MONTHS_EN[i - 1]].varValue or 0, 2)
+            rows.append({
+                "Mes": month,
+                "Mes_ES": MONTHS_ES[i],
+                "Demanda": int(HIST_DEMAND[p][i] * factor),
+                "Produccion": round(x[p, month].varValue or 0, 2),
+                "Inventario_Inicial": prev_stock,
+                "Inventario_Final": round(inv[p, month].varValue or 0, 2),
+                "Backlog": round(bkl[p, month].varValue or 0, 2),
+            })
+        result[p] = pd.DataFrame(rows)
+    return result
+
+
+@st.cache_data(show_spinner=False)
+def run_factory_simulation(plan_items, resource_items, oven_failure, speed_factor, seed=42,
+                           mix_range=(12, 18), bake_range=(30, 40), cool_range=(25, 55), pack_range=(4, 12)):
+    monthly_plan = dict(plan_items)
+    resources_map = dict(resource_items)
+    random.seed(seed)
+    np.random.seed(seed)
+
+    batches, logs, sensor_log = [], [], []
+    overrides = {
+        "mezcla": mix_range,
+        "horno": bake_range,
+        "enfriamiento": cool_range,
+        "empaque": pack_range,
+    }
+
+    def monitor(env, resources):
+        while True:
+            occupied = resources["horno"].count
+            temp = round(np.random.normal(162 + occupied * 11, 5), 2)
+            sensor_log.append({
+                "tiempo": round(env.now, 2),
+                "temperatura": temp,
+                "ocupacion_horno": occupied,
+                "cola_horno": len(resources["horno"].queue),
+            })
+            yield env.timeout(10)
+
+    def register_state(env, resources, product=""):
+        for name, res in resources.items():
+            logs.append({
+                "tiempo": round(env.now, 3),
+                "recurso": name,
+                "ocupados": res.count,
+                "cola": len(res.queue),
+                "capacidad": res.capacity,
+                "producto": product,
+            })
+
+    def process_batch(env, batch_id, product, units, resources):
+        start = env.now
+        total_wait = 0
+        for resource_name, low_t, high_t in PROCESS_ROUTES[product]:
+            low_, high_ = overrides.get(resource_name, (low_t, high_t))
+            duration = random.uniform(low_, high_) * math.sqrt(units / BATCH_SIZE[product]) * speed_factor
+            if oven_failure and resource_name == "horno":
+                duration += random.uniform(10, 30)
+
+            register_state(env, resources, product)
+            queue_in = env.now
+            with resources[resource_name].request() as req:
+                yield req
+                total_wait += env.now - queue_in
+                register_state(env, resources, product)
+                yield env.timeout(duration)
+            register_state(env, resources, product)
+
+        batches.append({
+            "lote": batch_id,
+            "producto": product,
+            "unidades": units,
+            "inicio": round(start, 2),
+            "fin": round(env.now, 2),
+            "tiempo_total": round(env.now - start, 2),
+            "espera_total": round(total_wait, 2),
+        })
+
+    env = simpy.Environment()
+    sim_resources = {k: simpy.Resource(env, capacity=v) for k, v in resources_map.items()}
+    env.process(monitor(env, sim_resources))
+
+    month_duration = 44 * 4 * 60
+    arrivals = []
+    seq = 0
+    for product, total_units in monthly_plan.items():
+        if total_units <= 0:
+            continue
+        batch = BATCH_SIZE[product]
+        count_batches = math.ceil(total_units / batch)
+        gap = month_duration / max(count_batches, 1)
+        next_t = random.expovariate(1 / max(gap, 1))
+        pending = total_units
+        for _ in range(count_batches):
+            arrivals.append((round(next_t, 2), product, min(batch, int(pending))))
+            pending -= batch
+            next_t += random.expovariate(1 / max(gap, 1))
+
+    arrivals.sort(key=lambda x: x[0])
+
+    def launcher():
+        nonlocal seq
+        for at, product, units in arrivals:
+            yield env.timeout(max(at - env.now, 0))
+            batch_id = f"{product[:3].upper()}-{seq:03d}"
+            seq += 1
+            env.process(process_batch(env, batch_id, product, units, sim_resources))
+
+    env.process(launcher())
+    env.run(until=month_duration * 1.8)
+
+    return pd.DataFrame(batches), pd.DataFrame(logs), pd.DataFrame(sensor_log)
+
+
+def summarize_utilization(log_df: pd.DataFrame) -> pd.DataFrame:
+    if log_df.empty:
+        return pd.DataFrame()
+    rows = []
+    for resource, grp in log_df.groupby("recurso"):
+        grp = grp.sort_values("tiempo").reset_index(drop=True)
+        cap = grp["capacidad"].iloc[0]
+        t = grp["tiempo"].values
+        used = grp["ocupados"].values
+        if len(t) > 1 and (t[-1] - t[0]) > 0:
+            fn = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
+            util = round(fn(used, t) / (cap * (t[-1] - t[0])) * 100, 2)
+        else:
+            util = 0.0
+        rows.append({
+            "Recurso": resource,
+            "Utilizacion": util,
+            "Cola_Promedio": round(grp["cola"].mean(), 3),
+            "Cola_Max": int(grp["cola"].max()),
+            "Capacidad": int(cap),
+            "Critico": util >= 80 or grp["cola"].mean() > 0.5,
+        })
+    return pd.DataFrame(rows).sort_values("Utilizacion", ascending=False).reset_index(drop=True)
+
+
+def summarize_kpis(batch_df: pd.DataFrame, plan: dict) -> pd.DataFrame:
+    if batch_df.empty:
+        return pd.DataFrame()
+    rows = []
+    horizon_hours = max((batch_df["fin"].max() - batch_df["inicio"].min()) / 60, 0.01)
+    for p in PRODUCTS:
+        subset = batch_df[batch_df["producto"] == p]
+        if subset.empty:
+            continue
+        produced = subset["unidades"].sum()
+        target = plan.get(p, 0)
+        throughput = round(produced / horizon_hours, 2)
+        lead_time = round(subset["tiempo_total"].mean(), 2)
+        cycle = round((subset["tiempo_total"] / subset["unidades"]).mean(), 3)
+        wip = round(throughput * (lead_time / 60), 2)
+        rows.append({
+            "Producto": PRODUCT_NAMES[p],
+            "Plan": target,
+            "Producido": produced,
+            "Cumplimiento": round(min(produced / max(target, 1) * 100, 100), 2),
+            "Throughput": throughput,
+            "Lead_Time": lead_time,
+            "Cycle_Time": cycle,
+            "WIP": wip,
+        })
+    return pd.DataFrame(rows)
+
+
+st.set_page_config(page_title="Centro Analítico Panadería", page_icon="📊", layout="wide")
+
+st.markdown(
+    f"""
+    <style>
+    .stApp {{background: linear-gradient(180deg, {PALETTE['bg']} 0%, #111827 100%);}}
+    .main-title {{font-size: 2.4rem; font-weight: 800; color: white; margin-bottom: 0.2rem;}}
+    .subtitle {{color: {PALETTE['muted']}; font-size: 1rem; margin-bottom: 1rem;}}
+    .panel {{background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); padding: 1rem; border-radius: 18px;}}
+    .metricbox {{background: white; border-radius: 18px; padding: 1rem; text-align: left; min-height: 118px;}}
+    .metricvalue {{font-size: 1.8rem; font-weight: 800; color: #111827;}}
+    .metriclabel {{font-size: 0.82rem; color: #64748B; text-transform: uppercase; letter-spacing: 1px;}}
+    .badge {{display: inline-block; padding: 0.35rem 0.8rem; border-radius: 999px; margin-right: 0.4rem; background: rgba(255,255,255,0.08); color: white; font-size: 0.8rem;}}
+    [data-testid='stSidebar'] {{background: #0B1220;}}
+    [data-testid='stSidebar'] * {{color: #E5E7EB !important;}}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+with st.sidebar:
+    st.header("⚙️ Controles")
+    selected_month = st.selectbox("Mes de simulación", range(12), format_func=lambda i: MONTHS_FULL[i], index=1)
+    demand_factor = st.slider("Multiplicador de demanda", 0.5, 2.0, 1.0, 0.05)
+    forecast_steps = st.slider("Horizonte de proyección", 1, 6, 4)
+
+    st.subheader("Capacidad del sistema")
+    oven_capacity = st.slider("Hornos activos", 1, 6, 3)
+    has_breakdown = st.checkbox("Introducir falla de horno")
+    fast_mode = st.checkbox("Modo acelerado de producción")
+    seed_value = st.number_input("Semilla", value=42, step=1)
+
+    st.subheader("Plantilla")
+    workers = st.number_input("Trabajadores por turno", value=10, min_value=1, step=1)
+    shifts_per_day = st.number_input("Turnos por día", value=3, min_value=1, max_value=3, step=1)
+    hours_shift = st.number_input("Horas por turno", value=8, min_value=4, max_value=12, step=1)
+    days_month = st.number_input("Días operativos", value=30, min_value=20, max_value=31, step=1)
+    efficiency = st.slider("Eficiencia (%)", 50, 110, 95)
+    absenteeism = st.slider("Ausentismo (%)", 0, 30, 5)
+
+    st.subheader("Costos")
+    ct = st.number_input("Ct", value=4310, step=100)
+    ht = st.number_input("Ht", value=100000, step=1000)
+    pit = st.number_input("PIt", value=100000, step=1000)
+    crt = st.number_input("CRt", value=11364, step=100)
+    cot = st.number_input("COt", value=14205, step=100)
+    cplus = st.number_input("CW+", value=14204, step=100)
+    cminus = st.number_input("CW-", value=15061, step=100)
+
+    st.subheader("Recursos")
+    mix_cap = st.number_input("Mezcla", value=2, min_value=1, step=1)
+    dosing_cap = st.number_input("Dosificado", value=2, min_value=1, step=1)
+    cool_cap = st.number_input("Enfriamiento", value=4, min_value=1, step=1)
+    pack_cap = st.number_input("Empaque", value=2, min_value=1, step=1)
+    knead_cap = st.number_input("Amasado", value=1, min_value=1, step=1)
+
+    st.subheader("Tiempos")
+    mix_max = st.slider("Mezcla max", 8, 30, 18)
+    bake_max = st.slider("Horneado max", 20, 60, 40)
+    cool_max = st.slider("Enfriamiento max", 15, 80, 55)
+    pack_max = st.slider("Empaque max", 2, 20, 12)
+
+available_hh = round(workers * shifts_per_day * hours_shift * days_month * (efficiency / 100) * ((100 - absenteeism) / 100))
+
+settings = {
+    **BASE_SETTINGS,
+    "Ct": ct,
+    "Ht": ht,
+    "PIt": pit,
+    "CRt": crt,
+    "COt": cot,
+    "CW_plus": cplus,
+    "CW_minus": cminus,
+    "LR_initial": workers * shifts_per_day * hours_shift * days_month,
+}
+
+agg_df, total_cost = aggregate_plan(demand_factor, tuple(sorted(settings.items())))
+plan_hh = dict(zip(agg_df["Mes"], agg_df["Produccion_HH"]))
+product_plan = product_breakdown(tuple(plan_hh.items()), demand_factor, 1.0, 1.0)
+month_key = MONTHS_EN[selected_month]
+month_plan = {p: int(product_plan[p].loc[product_plan[p]["Mes"] == month_key, "Produccion"].values[0]) for p in PRODUCTS}
+
+resource_cfg = {
+    "mezcla": mix_cap,
+    "dosificado": dosing_cap,
+    "horno": int(oven_capacity),
+    "enfriamiento": cool_cap,
+    "empaque": pack_cap,
+    "amasado": knead_cap,
+}
+
+speed = 0.82 if fast_mode else 1.0
+mix_range = (max(8, mix_max - 6), mix_max)
+bake_range = (max(20, bake_max - 10), bake_max)
+cool_range = (max(15, cool_max - 15), cool_max)
+pack_range = (max(2, pack_max - 4), pack_max)
+
+batches_df, log_df, sensor_df = run_factory_simulation(
+    tuple(month_plan.items()), tuple(resource_cfg.items()), has_breakdown, speed, int(seed_value),
+    mix_range, bake_range, cool_range, pack_range,
+)
+
+kpi_df = summarize_kpis(batches_df, month_plan)
+util_df = summarize_utilization(log_df)
+
+avg_fill = kpi_df["Cumplimiento"].mean() if not kpi_df.empty else 0
+max_util = util_df["Utilizacion"].max() if not util_df.empty else 0
+avg_temp = sensor_df["temperatura"].mean() if not sensor_df.empty else 0
+critical_temp = int((sensor_df["temperatura"] > 200).sum()) if not sensor_df.empty else 0
+
+st.markdown('<div class="main-title">Centro Analítico de Producción</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Versión rediseñada con estructura ejecutiva, panel oscuro y navegación por bloques.</div>', unsafe_allow_html=True)
+st.markdown(
+    f"<span class='badge'>Mes: {MONTHS_FULL[selected_month]}</span>"
+    f"<span class='badge'>Demanda x{demand_factor}</span>"
+    f"<span class='badge'>Capacidad efectiva: {available_hh:,} H-H</span>"
+    f"<span class='badge'>Hornos: {oven_capacity}</span>",
+    unsafe_allow_html=True,
+)
+
+m1, m2, m3, m4 = st.columns(4)
+for col, label, value_, extra in [
+    (m1, "Costo anual", f"${total_cost:,.0f}", "Plan agregado"),
+    (m2, "Cumplimiento", f"{avg_fill:.1f}%", "Simulación mensual"),
+    (m3, "Utilización máxima", f"{max_util:.0f}%", "Recurso crítico"),
+    (m4, "Temperatura media", f"{avg_temp:.0f}°C", f"Eventos >200°C: {critical_temp}"),
+]:
+    col.markdown(f"<div class='metricbox'><div class='metriclabel'>{label}</div><div class='metricvalue'>{value_}</div><div style='color:#64748B'>{extra}</div></div>", unsafe_allow_html=True)
+
+view = st.radio(
+    "Navegación",
+    ["Resumen ejecutivo", "Planeación agregada", "Portafolio de productos", "Operación simulada", "Sensores y riesgos", "Escenarios"],
+    horizontal=True,
+)
+
+if view == "Resumen ejecutivo":
+    left, right = st.columns([1.25, 1])
+    with left:
+        demand_long = []
+        for p in PRODUCTS:
+            _, future = smooth_forecast([x * demand_factor for x in HIST_DEMAND[p]], forecast_steps)
+            for i, value_ in enumerate(HIST_DEMAND[p]):
+                demand_long.append({"Periodo": MONTHS_ES[i], "Valor": value_ * demand_factor, "Producto": PRODUCT_NAMES[p], "Tipo": "Histórico"})
+            for j, value_ in enumerate(future):
+                demand_long.append({"Periodo": f"F{j+1}", "Valor": value_, "Producto": PRODUCT_NAMES[p], "Tipo": "Proyección"})
+        df_demand_long = pd.DataFrame(demand_long)
+        fig = px.line(df_demand_long, x="Periodo", y="Valor", color="Producto", line_dash="Tipo", markers=True,
+                      color_discrete_map={PRODUCT_NAMES[k]: PRODUCT_COLORS[k] for k in PRODUCTS})
+        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.02)", height=430)
+        st.plotly_chart(fig, use_container_width=True)
+    with right:
+        hh = human_hour_demand(demand_factor)
+        fig2 = go.Figure(go.Bar(x=MONTHS_ES, y=list(hh.values()), marker_color=PALETTE["accent_2"]))
+        fig2.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.02)", height=430, title="Carga laboral mensual")
+        st.plotly_chart(fig2, use_container_width=True)
+
+elif view == "Planeación agregada":
+    c1, c2 = st.columns([1.5, 1])
+    with c1:
+        fig = go.Figure()
+        fig.add_bar(x=agg_df["Mes_ES"], y=agg_df["Produccion_HH"], name="Producción H-H", marker_color=PALETTE["accent"])
+        fig.add_scatter(x=agg_df["Mes_ES"], y=agg_df["Demanda_HH"], mode="lines+markers", name="Demanda H-H", line=dict(color=PALETTE["accent_2"], width=3))
+        fig.add_scatter(x=agg_df["Mes_ES"], y=[available_hh] * 12, mode="lines", name="Capacidad efectiva", line=dict(color=PALETTE["warn"], dash="dash"))
+        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.02)", height=420)
+        st.plotly_chart(fig, use_container_width=True)
+    with c2:
+        st.dataframe(
+            agg_df[["Mes_Full", "Produccion_HH", "Demanda_HH", "Horas_Extra", "Backlog_HH"]].rename(columns={"Mes_Full": "Mes"}),
+            use_container_width=True,
+            height=420,
+        )
+
+elif view == "Portafolio de productos":
+    tabs = st.tabs([PRODUCT_NAMES[p] for p in PRODUCTS])
+    for i, p in enumerate(PRODUCTS):
+        with tabs[i]:
+            product_df = product_plan[p]
+            a, b = st.columns([1.35, 1])
+            with a:
+                fig = go.Figure()
+                fig.add_bar(x=product_df["Mes_ES"], y=product_df["Produccion"], marker_color=PRODUCT_COLORS[p], name="Producción")
+                fig.add_scatter(x=product_df["Mes_ES"], y=product_df["Demanda"], mode="lines+markers", line=dict(color="#FFFFFF", dash="dot"), name="Demanda")
+                fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.02)", title=f"{PRODUCT_NAMES[p]}")
+                st.plotly_chart(fig, use_container_width=True)
+            with b:
+                st.metric("Plan del mes seleccionado", f"{month_plan[p]:,} und")
+                st.metric("Demanda anual", f"{product_df['Demanda'].sum():,} und")
+                st.metric("Inventario final anual", f"{product_df['Inventario_Final'].iloc[-1]:,.0f} und")
+                st.dataframe(product_df, use_container_width=True, height=300)
+
+elif view == "Operación simulada":
+    a, b = st.columns([1.1, 1])
+    with a:
+        if not kpi_df.empty:
+            fig = px.bar(kpi_df, x="Producto", y="Cumplimiento", color="Producto",
+                         color_discrete_sequence=list(PRODUCT_COLORS.values()), text_auto=".1f")
+            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.02)", height=360)
+            st.plotly_chart(fig, use_container_width=True)
+        st.dataframe(kpi_df, use_container_width=True, height=250)
+    with b:
+        if not util_df.empty:
+            fig2 = px.bar(util_df, x="Recurso", y="Utilizacion", color="Critico", text_auto=".1f",
+                          color_discrete_map={True: PALETTE["danger"], False: PALETTE["accent"]})
+            fig2.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.02)", height=360)
+            st.plotly_chart(fig2, use_container_width=True)
+        st.dataframe(util_df, use_container_width=True, height=250)
+
+elif view == "Sensores y riesgos":
+    if sensor_df.empty:
+        st.info("No hay datos de sensores para mostrar.")
     else:
-        st.markdown("""
-        <div class="info-box" style="text-align:center;padding:2rem;">
-          <div style="font-size:2.5rem">🔬</div>
-          <b>Selecciona escenarios y haz clic en Comparar</b><br>
-          <span style="font-size:0.85rem;color:#9B7B5A;">Se simulará cada escenario y se compararán KPIs lado a lado</span>
-        </div>""", unsafe_allow_html=True)
+        x1, x2 = st.columns(2)
+        with x1:
+            fig = go.Figure()
+            fig.add_scatter(x=sensor_df["tiempo"], y=sensor_df["temperatura"], mode="lines", line=dict(color=PALETTE["warn"], width=2.5), fill="tozeroy")
+            fig.add_hline(y=200, line_dash="dash", line_color=PALETTE["danger"])
+            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.02)", height=360, title="Temperatura de horno")
+            st.plotly_chart(fig, use_container_width=True)
+        with x2:
+            fig2 = px.histogram(sensor_df, x="temperatura", nbins=30)
+            fig2.update_traces(marker_color=PALETTE["accent_2"])
+            fig2.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.02)", height=360, title="Distribución térmica")
+            st.plotly_chart(fig2, use_container_width=True)
+        st.dataframe(sensor_df.tail(40), use_container_width=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# FOOTER
-# ══════════════════════════════════════════════════════════════════════════════
-st.markdown("---")
-st.markdown(f"""
-<div style='text-align:center;color:#C68B59;font-size:0.82rem;
-     font-family:Plus Jakarta Sans,sans-serif;padding:0.4rem 0 1rem'>
-  🥐 <b>Gemelo Digital — Panadería Dora del Hoyo</b> &nbsp;·&nbsp;
-  Planeación Agregada · Desagregación LP · Simulación SimPy · Streamlit
-</div>""", unsafe_allow_html=True)
+else:
+    scenario_defs = {
+        "Base": {"factor": 1.0, "fail": False, "speed": 1.0, "oven_delta": 0},
+        "Alta demanda": {"factor": 1.2, "fail": False, "speed": 1.0, "oven_delta": 0},
+        "Falla térmica": {"factor": 1.0, "fail": True, "speed": 1.0, "oven_delta": 0},
+        "Turno ágil": {"factor": 1.0, "fail": False, "speed": 0.82, "oven_delta": 0},
+        "Capacidad expandida": {"factor": 1.0, "fail": False, "speed": 1.0, "oven_delta": 1},
+    }
+    chosen = st.multiselect("Escenarios", list(scenario_defs.keys()), default=["Base", "Alta demanda", "Turno ágil"])
+    if st.button("Ejecutar comparación"):
+        rows = []
+        for name in chosen:
+            sc = scenario_defs[name]
+            alt_plan = {p: max(int(v * sc["factor"]), 0) for p, v in month_plan.items()}
+            alt_resources = {**resource_cfg, "horno": max(resource_cfg["horno"] + sc["oven_delta"], 1)}
+            sim_b, sim_l, _ = run_factory_simulation(
+                tuple(alt_plan.items()), tuple(alt_resources.items()), sc["fail"], sc["speed"], int(seed_value),
+                mix_range, bake_range, cool_range, pack_range,
+            )
+            sk = summarize_kpis(sim_b, alt_plan)
+            su = summarize_utilization(sim_l)
+            rows.append({
+                "Escenario": name,
+                "Cumplimiento": round(sk["Cumplimiento"].mean(), 2) if not sk.empty else 0,
+                "Throughput": round(sk["Throughput"].mean(), 2) if not sk.empty else 0,
+                "Lead Time": round(sk["Lead_Time"].mean(), 2) if not sk.empty else 0,
+                "Utilización Max": round(su["Utilizacion"].max(), 2) if not su.empty else 0,
+                "Lotes": len(sim_b),
+            })
+        comp = pd.DataFrame(rows)
+        st.dataframe(comp, use_container_width=True)
+        if not comp.empty:
+            fig = px.scatter(comp, x="Throughput", y="Lead Time", size="Cumplimiento", color="Escenario", hover_name="Escenario")
+            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.02)", height=420)
+            st.plotly_chart(fig, use_container_width=True)
+
+st.caption("Código reestructurado con nueva identidad visual, navegación distinta y organización funcional más ejecutiva.")
