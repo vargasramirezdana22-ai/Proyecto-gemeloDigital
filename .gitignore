@@ -1,4 +1,3 @@
-rename gitignore .gitignore
-git add .gitignore
-git commit -m "agrego gitignore"
+git add app.py
+git commit -m "fix error horas extra"
 git push
