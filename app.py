@@ -578,31 +578,41 @@ html, body, [class*="css"] {{font-family:'Plus Jakarta Sans',sans-serif; backgro
 .info-box {{background:{C["panel_2"]}; border:1px solid {C["line"]}; border-radius:14px; padding:0.9rem 1rem; color:{C["text"]}; font-size:0.9rem; margin:0.5rem 0 0.9rem;}}
 .pill-ok {{background:{C["mint"]}; color:{C["text"]}; padding:0.28rem 0.85rem; border-radius:999px; font-size:0.82rem; display:inline-block; font-weight:600;}}
 .pill-warn {{background:{C["pink"]}; color:{C["text"]}; padding:0.28rem 0.85rem; border-radius:999px; font-size:0.82rem; display:inline-block; font-weight:600;}}
-[data-testid="stSidebar"] {{background: linear-gradient(180deg, #fffaf3 0%, #fff3eb 100%) !important; border-right: 1px solid {C["line"]}; position: sticky; top: 0; height: 100vh; overflow-y: auto;}}
+[data-testid="stSidebar"] {{background: linear-gradient(180deg, #fffaf3 0%, #fff3eb 100%) !important; border-right: 1px solid {C["line"]};}}
 [data-testid="stSidebar"] * {{color: {C["text"]} !important;}}
-.stTabs [data-baseweb="tab"] {{font-weight:600;}}</style>
+.stTabs [data-baseweb="tab"] {{font-weight:600;}}
+.top-bar {{background:{C["panel"]}; border:1px solid {C["line"]}; border-radius:16px; padding:1rem 1.2rem; margin-bottom:1rem; box-shadow:0 4px 12px rgba(120,100,90,0.06);}}
+.top-bar h3 {{font-family:'Fraunces',serif; color:{C["text"]}; font-size:1.1rem; margin:0 0 0.5rem 0;}}
+.top-bar .stSlider, .top-bar .stSelectbox, .top-bar .stNumberInput {{margin-bottom:0.3rem;}}</style>
 """, unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SIDEBAR · SOLO GENERALES
+# BARRA SUPERIOR · PARÁMETROS GENERALES
 # ══════════════════════════════════════════════════════════════════════════════
-with st.sidebar:
-    st.markdown("## 🥐 Dora del Hoyo")
-    st.markdown("*Gemelo Digital v3.1*")
-    st.markdown("### Parámetros generales")
+st.markdown('<div class="top-bar"><h3>🥐 Dora del Hoyo · Parámetros generales</h3></div>', unsafe_allow_html=True)
+
+col_mes, col_imp, col_hor, col_mkt, col_vol, col_sem = st.columns(6)
+
+with col_mes:
     st.session_state["mes_idx"] = st.selectbox(
         "Mes de análisis",
         range(12),
         index=st.session_state["mes_idx"],
         format_func=lambda i: MESES_F[i],
     )
-    st.session_state["factor_demanda"] = st.slider("Impulso de demanda", 0.5, 2.0, st.session_state["factor_demanda"], 0.05)
-    st.session_state["meses_pronostico"] = st.slider("Horizonte de proyección", 1, 6, st.session_state["meses_pronostico"])
-    st.session_state["participacion_mercado"] = st.slider("Cobertura comercial (%)", 0.01, 0.25, st.session_state["participacion_mercado"], 0.01)
-    st.session_state["litros_por_unidad"] = st.slider("Volumen por unidad", 0.20, 1.50, st.session_state["litros_por_unidad"], 0.05)
-    st.session_state["semilla"] = st.number_input("Semilla aleatoria", value=st.session_state["semilla"], step=1)
-    st.caption("Los demás parámetros viven dentro de cada sección funcional.")
+with col_imp:
+    st.session_state["factor_demanda"] = st.slider("Impulso demanda", 0.5, 2.0, st.session_state["factor_demanda"], 0.05)
+with col_hor:
+    st.session_state["meses_pronostico"] = st.slider("Horizonte", 1, 6, st.session_state["meses_pronostico"])
+with col_mkt:
+    st.session_state["participacion_mercado"] = st.slider("Mercado (%)", 0.01, 0.25, st.session_state["participacion_mercado"], 0.01)
+with col_vol:
+    st.session_state["litros_por_unidad"] = st.slider("Volumen (L)", 0.20, 1.50, st.session_state["litros_por_unidad"], 0.05)
+with col_sem:
+    st.session_state["semilla"] = st.number_input("Semilla", value=st.session_state["semilla"], step=1)
+
+st.markdown("---")
 
 PLOT_CFG = dict(
     template="plotly_white",
