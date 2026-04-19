@@ -997,7 +997,7 @@ with tabs[5]:
             color="#E8F5E9",
         ), use_container_width=True)
 
-        # Radar chart de comparación
+# Radar chart de comparación
         if len(df_comp) > 1:
             cols_radar = [c for c in df_comp.columns if c != "Escenario"]
             df_norm = df_comp[cols_radar].copy()
@@ -1008,18 +1008,18 @@ with tabs[5]:
             fig_r = go.Figure()
             colores_esc = ["#E8A838","#4FC3F7","#EF5350","#81C784","#CE93D8","#FF8A65"]
             RGBA_ESC = [
-    "rgba(232,168,56,0.15)", "rgba(79,195,247,0.15)", "rgba(239,83,80,0.15)",
-    "rgba(129,199,132,0.15)","rgba(206,147,216,0.15)","rgba(255,138,101,0.15)",
-]
-for i, row in df_comp.iterrows():
-    vals = [df_norm.loc[i,c] for c in cols_radar]
-    fig_r.add_trace(go.Scatterpolar(
-        r=vals+[vals[0]], theta=cols_radar+[cols_radar[0]],
-        fill="toself", name=row["Escenario"],
-        line=dict(color=colores_esc[i % len(colores_esc)]),
-        fillcolor=RGBA_ESC[i % len(RGBA_ESC)],
-        opacity=0.8,
-    ))
+                "rgba(232,168,56,0.15)", "rgba(79,195,247,0.15)", "rgba(239,83,80,0.15)",
+                "rgba(129,199,132,0.15)","rgba(206,147,216,0.15)","rgba(255,138,101,0.15)",
+            ]
+            for i, row in df_comp.iterrows():
+                vals = [df_norm.loc[i,c] for c in cols_radar]
+                fig_r.add_trace(go.Scatterpolar(
+                    r=vals+[vals[0]], theta=cols_radar+[cols_radar[0]],
+                    fill="toself", name=row["Escenario"],
+                    line=dict(color=colores_esc[i % len(colores_esc)]),
+                    fillcolor=RGBA_ESC[i % len(RGBA_ESC)],
+                    opacity=0.8,
+                ))
             fig_r.update_layout(
                 polar=dict(radialaxis=dict(visible=True, range=[0,1])),
                 title="Comparación Normalizada de Escenarios",
@@ -1028,7 +1028,6 @@ for i, row in df_comp.iterrows():
             st.plotly_chart(fig_r, use_container_width=True)
     else:
         st.info("👆 Selecciona los escenarios y haz clic en **Comparar** para ver los resultados.")
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FOOTER
