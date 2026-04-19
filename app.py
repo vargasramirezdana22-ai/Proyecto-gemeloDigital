@@ -591,14 +591,16 @@ with tabs[1]:
 
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("💰 Costo Total", f"${costo:,.0f} COP")
+    # CALCULAR VARIABLES ANTES
     horas_extra = df_agr["Horas_Extras"].sum()
     backlog_total = df_agr["Backlog_HH"].sum()
     contrataciones = df_agr["Contratacion"].sum()
     despidos = df_agr["Despidos"].sum()
+    
+    # USAR VARIABLES (SIN \" )
     m2.metric("⏰ Horas Extra", f"{horas_extra:,.0f} H-H")
     m3.metric("📉 Backlog Total", f"{backlog_total:,.0f} H-H")
     m4.metric("👥 Contrat. Netas", f"{contrataciones - despidos:+,.0f} pers.")
-
     st.markdown('<div class="sec-title">📊 Producción vs Demanda (H-H)</div>', unsafe_allow_html=True)
     fig_agr = go.Figure()
     fig_agr.add_trace(go.Bar(x=df_agr["Mes_ES"], y=df_agr["Inv_Ini_HH"], name="Inv. Inicial H-H", marker_color=C["sky"], opacity=0.85, marker_line_color="white", marker_line_width=1))
