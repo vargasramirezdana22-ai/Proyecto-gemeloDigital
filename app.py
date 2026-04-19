@@ -629,12 +629,26 @@ with tabs[2]:
     st.markdown('<div class="sec-title">📦 Inventario final proyectado</div>', unsafe_allow_html=True)
     fig_inv=go.Figure()
     for p in PRODUCTOS:
-        fig_inv.add_trace(go.Scatter(x=desag[p]["Mes_ES"],y=desag[p]["Inv_Fin"],
-                                     name=PROD_LABELS[p],mode="lines+markers",
-                                     line=dict(color=PROD_COLORS_DARK[p],width=2),
-                                     marker=dict(size=7,color=PROD_COLORS[p],
-                                                 line=dict(color=PROD_COLORS_DARK[p],width=1.5)),
-                                     fill="tozeroy",fillcolor=PROD_COLORS[p]+"28"))
+        color = PROD_COLORS[p]
+        # Convertir hex a rgba para la transparencia
+        r = int(color[1:3], 16)
+        g = int(color[3:5], 16)
+        b = int(color[5:7], 16)
+        fill_rgba = f"rgba({r},{g},{b},0.15)"
+    
+    fig_inv.add_trace(go.Scatter(x=desag[p]["Mes_ES"],y=desag[p]["Inv_Fin"],
+                                 name=PROD_LABELS[p],mode="lines+markers",
+                                 line=dict(color=PROD_COLORS_DARK[p],width=2),
+                                 marker=dict(size=7,color=PROD_COLORS[p],
+                                             line=dict(color=PROD_COLORS_DARK[p],width=1.5)),
+                                 fill="tozeroy",fillcolor=fill_rgba))
+    
+    fig_inv.add_trace(go.Scatter(x=desag[p]["Mes_ES"],y=desag[p]["Inv_Fin"],
+                                 name=PROD_LABELS[p],mode="lines+markers",
+                                 line=dict(color=PROD_COLORS_DARK[p],width=2),
+                                 marker=dict(size=7,color=PROD_COLORS[p],
+                                             line=dict(color=PROD_COLORS_DARK[p],width=1.5)),
+                                 fill="tozeroy",fillcolor=fill_rgba))
     fig_inv.update_layout(**PLOT_CFG,height=280,xaxis_title="Mes",yaxis_title="Unidades en inventario",
                           legend=dict(orientation="h",y=-0.28,x=0.5,xanchor="center"),
                           xaxis=dict(showgrid=False),yaxis=dict(gridcolor="#F0E8D8"))
