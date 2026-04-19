@@ -678,15 +678,15 @@ with tabs[1]:
 
     with st.expander("💰 Costos del modelo LP", expanded=True):
         ac1,ac2,ac3,ac4 = st.columns(4)
-        ct  = ac1.number_input("Costo producción (Ct)",   value=4_310,   step=100, key="ct")
-        ht  = ac2.number_input("Costo inventario (Ht)",   value=100_000, step=1000, key="ht")
-        pit = ac3.number_input("Costo diferimiento (PIt)",value=100_000, step=1000, key="pit")
+        ct  = ac1.number_input("Ct — Producción (COP/H-H)",    value=4_310,   step=100,  key="ct")
+        ht  = ac2.number_input("Ht — Inventario (COP/H-H)",    value=100_000, step=1000, key="ht")
+        pit = ac3.number_input("PIt — Diferimiento (COP/H-H)", value=100_000, step=1000, key="pit")
         stock_obj = ac4.slider("Stock seguridad (× dem.)", 0.0, 0.5, 0.0, 0.05, key="stock_obj")
         ac5,ac6,ac7,ac8 = st.columns(4)
-        crt = ac5.number_input("Costo hora regular (CRt)", value=11_364, step=100, key="crt")
-        cot = ac6.number_input("Costo hora extra (COt)",   value=14_205, step=100, key="cot")
-        cwp = ac7.number_input("Costo contratar (CW+)",    value=14_204, step=100, key="cwp")
-        cwm = ac8.number_input("Costo despedir (CW−)",     value=15_061, step=100, key="cwm")
+        crt = ac5.number_input("CRt — Hora regular (COP/H-H)",     value=11_364, step=100, key="crt")
+        cot = ac6.number_input("COt — Hora extra (COP/H-H)",        value=14_205, step=100, key="cot")
+        cwp = ac7.number_input("CW+ — Contratar (COP/H-H cap.)",    value=14_204, step=100, key="cwp")
+        cwm = ac8.number_input("CW− — Despedir (COP/H-H cap.)",     value=15_061, step=100, key="cwm")
 
     with st.expander("👷 Fuerza laboral y capacidad", expanded=True):
         lc1,lc2,lc3,lc4 = st.columns(4)
@@ -732,10 +732,10 @@ with tabs[1]:
     st.markdown(f'<div class="info-box"><b>{trab} trabajadores</b> · {turnos_dia} turno(s)/día · {horas_turno}h/turno · {dias_mes} días/mes · Eficiencia efectiva: <b>{factor_ef*100:.1f}%</b> → Capacidad: <b>{LR_inicial:,.0f} H-H/mes</b></div>', unsafe_allow_html=True)
 
     m1,m2,m3,m4 = st.columns(4)
-    m1.metric("💰 Costo Total",    f"${costo:,.0f} COP")
+    m1.metric("💰 Costo Total",    f"${costo/1e6:.2f}M COP")
     m2.metric("⏰ Horas Extra",     f"{df_agr['Horas_Extras'].sum():,.0f} H-H")
     m3.metric("📉 Backlog Total",   f"{df_agr['Backlog_HH'].sum():,.0f} H-H")
-    m4.metric("👥 Contrat. Netas", f"{df_agr['Contratacion'].sum()-df_agr['Despidos'].sum():+.0f} pers.")
+    m4.metric("👥 Contrat. Netas", f"{df_agr['Contratacion'].sum()-df_agr['Despidos'].sum():+.0f} H-H")
 
     fig_agr = go.Figure()
     fig_agr.add_trace(go.Bar(x=df_agr["Mes_ES"], y=df_agr["Inv_Ini_HH"], name="Inv. Inicial H-H",
@@ -748,7 +748,7 @@ with tabs[1]:
     fig_agr.add_trace(go.Scatter(x=df_agr["Mes_ES"], y=df_agr["Horas_Regulares"], mode="lines",
                                  name="Cap. Regular", line=dict(color=C["lavender"], dash="dot", width=2)))
     fig_agr.update_layout(**PLOT_CFG, barmode="stack", height=380,
-                          title=f"Plan agregado — Costo óptimo LP: ${costo:,.0f}",
+                          title=f"Plan agregado — Costo óptimo LP: ${costo/1e6:.2f}M COP",
                           xaxis_title="Mes", yaxis_title="Horas-Hombre",
                           legend=dict(orientation="h", y=-0.23, x=0.5, xanchor="center"),
                           xaxis=dict(showgrid=False), yaxis=dict(gridcolor=C["line"]))
@@ -800,7 +800,7 @@ with tabs[2]:
         suavizado_des = da3.slider("Suavizado de producción",        0, 5000, 500, 100, key="suav")
 
     mes_resaltar  = st.selectbox("★ Mes a resaltar", range(12), index=mes_idx,
-                                  format_func=lambda i: MESES_F[i], key="mes_desag")
+                                  format_func=lambda i: MESES_F[i])
     mes_nm_desag  = MESES[mes_resaltar]
 
     # Desagregación depende de plan agregado calculado en tab 1
@@ -1488,3 +1488,4 @@ st.markdown("""
   🥐 <b>Gemelo Digital — Panadería Dora del Hoyo v4.0</b> &nbsp;·&nbsp;
   Optimización LP · Desagregación · SimPy · Streamlit
 </div>""", unsafe_allow_html=True)
+
