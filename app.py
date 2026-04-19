@@ -605,7 +605,26 @@ with st.sidebar:
     st.session_state["semilla"] = st.number_input("Semilla aleatoria", value=st.session_state["semilla"], step=1)
     st.caption("Los demás parámetros viven dentro de cada sección funcional.")
 
-# tabs primero para capturar widgets por sección
+# ══════════════════════════════════════════════════════════════════════════════
+# BARRA LATERAL · SOLO GENERALES
+# ══════════════════════════════════════════════════════════════════════════════
+with st.sidebar:
+    st.markdown("## 🥐 Dora del Hoyo")
+    st.markdown("*Gemelo Digital v3.2*")
+    st.markdown("### Parámetros generales")
+    st.session_state["mes_idx"] = st.selectbox(
+        "Mes de análisis",
+        range(12),
+        index=st.session_state["mes_idx"],
+        format_func=lambda i: MESES_F[i],
+    )
+    st.session_state["factor_demanda"] = st.slider("Impulso de demanda", 0.5, 2.0, st.session_state["factor_demanda"], 0.05)
+    st.session_state["meses_pronostico"] = st.slider("Horizonte de proyección", 1, 6, st.session_state["meses_pronostico"])
+    st.session_state["participacion_mercado"] = st.slider("Cobertura comercial (%)", 0.01, 0.25, st.session_state["participacion_mercado"], 0.01)
+    st.session_state["litros_por_unidad"] = st.slider("Volumen por unidad", 0.20, 1.50, st.session_state["litros_por_unidad"], 0.05)
+    st.session_state["semilla"] = st.number_input("Semilla aleatoria", value=st.session_state["semilla"], step=1)
+    st.caption("Los parámetros especializados aparecen dentro de cada módulo.")
+
 PLOT_CFG = dict(
     template="plotly_white",
     font=dict(family="Plus Jakarta Sans", color=C["text"]),
@@ -613,51 +632,86 @@ PLOT_CFG = dict(
     plot_bgcolor=C["bg"],
 )
 
-tabs = st.tabs([
-    "📊 Demanda",
-    "📋 Agregación",
-    "📦 Desagregación",
-    "🏭 Simulación",
-    "🌡️ Sensores",
-    "🔬 Escenarios",
+# tomar valores generales del estado
+mes_idx = int(st.session_state["mes_idx"])
+factor_demanda = float(st.session_state["factor_demanda"])
+meses_pronostico = int(st.session_state["meses_pronostico"])
+participacion_mercado = float(st.session_state["participacion_mercado"])
+litros_por_unidad = float(st.session_state["litros_por_unidad"])
+semilla = int(st.session_state["semilla"])
+
+# HERO SIEMPRE ARRIBA
+st.markdown(f"""
+<div class="hero">
+  <h1>Gemelo Digital · Panadería Dora del Hoyo</h1>
+  <p>Planeación, simulación y decisión operativa para una panadería artesanal con estética propia y parámetros organizados por función.</p>
+  <span class="badge">📅 {MESES_F[mes_idx]}</span>
+  <span class="badge">📈 Impulso x{factor_demanda:.2f}</span>
+  <span class="badge">🥛 mercado {participacion_mercado:.0%}</span>
+  <span class="badge">🧁 {litros_por_unidad:.2f} L por unidad</span>
+</div>
+""", unsafe_allow_html=True)
+
+# pestañas visibles y correctas
+TABS = st.tabs([
+    "📊 Demanda y proyección",
+    "📋 Planeación agregada",
+    "📦 Desagregación por producto",
+    "🏭 Simulación operativa",
+    "🌡️ Sensores y horno",
+    "🔬 Escenarios what-if",
 ])
 
-# parámetros por sección
-with tabs[1]:
+# ══════════════════════════════════════════════════════════════════════════════
+# CAPTURA DE PARÁMETROS POR MÓDULO
+# ══════════════════════════════════════════════════════════════════════════════
+with TABS[0]:
+    st.markdown('<div class="sec-title">Configuración comercial de demanda</div>', unsafe_allow_html=True)
+    st.markdown('<div class="info-box">Estos ajustes solo afectan la lectura y proyección de la demanda, sin tocar todavía la lógica de costos o de planta.</div>', unsafe_allow_html=True)
+    d1, d2, d3 = st.columns(3)
+    st.session_state["mix_brownies"] = d1.slider("Peso comercial Brownies", 0.8, 1.3, st.session_state.get("mix_brownies", 1.0), 0.05)
+    st.session_state["mix_mantecadas"] = d2.slider("Peso comercial Mantecadas", 0.8, 1.3, st.session_state.get("mix_mantecadas", 1.0), 0.05)
+    st.session_state["mix_tortas"] = d3.slider("Peso comercial Torta/Pan", 0.8, 1.3, st.session_state.get("mix_tortas", 1.0), 0.05)
+
+with TABS[1]:
     st.markdown('<div class="sec-title">Configuración de planeación agregada</div>', unsafe_allow_html=True)
-    st.markdown('<div class="info-box">Aquí se ajustan únicamente los costos y la estructura laboral que impactan la optimización agregada.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="info-box">Ajustes económicos y laborales que impactan la optimización agregada del plan maestro.</div>', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
     st.session_state["ct"] = c1.number_input("Costo de producción (Ct)", value=st.session_state["ct"], step=100)
     st.session_state["ht"] = c2.number_input("Costo de inventario (Ht)", value=st.session_state["ht"], step=5000)
     st.session_state["pit"] = c3.number_input("Costo de diferimiento (PIt)", value=st.session_state["pit"], step=5000)
     st.session_state["inv_seg"] = c4.slider("Reserva mínima", 0.0, 0.30, st.session_state["inv_seg"], 0.01)
-
     c5, c6, c7, c8 = st.columns(4)
     st.session_state["crt"] = c5.number_input("Costo regular (CRt)", value=st.session_state["crt"], step=100)
     st.session_state["cot"] = c6.number_input("Costo extra (COt)", value=st.session_state["cot"], step=100)
     st.session_state["cwp"] = c7.number_input("Costo contratación", value=st.session_state["cwp"], step=100)
     st.session_state["cwm"] = c8.number_input("Costo desvinculación", value=st.session_state["cwm"], step=100)
-
     c9, c10, c11, c12 = st.columns(4)
     st.session_state["trab"] = c9.number_input("Operarios por turno", value=st.session_state["trab"], step=1)
     st.session_state["turnos_dia"] = c10.number_input("Turnos diarios", value=st.session_state["turnos_dia"], step=1)
     st.session_state["horas_turno"] = c11.number_input("Horas por turno", value=st.session_state["horas_turno"], step=1)
     st.session_state["dias_mes"] = c12.number_input("Días hábiles del mes", value=st.session_state["dias_mes"], step=1)
-
     c13, c14 = st.columns(2)
     st.session_state["eficiencia"] = c13.slider("Rendimiento operativo (%)", 60, 110, st.session_state["eficiencia"])
     st.session_state["ausentismo"] = c14.slider("Ausencia de personal (%)", 0, 20, st.session_state["ausentismo"])
+    c15, c16 = st.columns(2)
+    st.session_state["stock_obj"] = c15.slider("Cobertura objetivo (meses)", 0.0, 1.0, st.session_state.get("stock_obj", 0.25), 0.05)
+    st.session_state["flexibilidad"] = c16.slider("Flexibilidad operativa", 0.5, 1.5, st.session_state.get("flexibilidad", 1.0), 0.05)
 
-with tabs[2]:
+with TABS[2]:
     st.markdown('<div class="sec-title">Ajuste del reparto por producto</div>', unsafe_allow_html=True)
-    st.markdown('<div class="info-box">Estos pesos alteran cómo se reparte la producción entre referencias cuando se balancea inventario y faltantes.</div>', unsafe_allow_html=True)
-    d1, d2 = st.columns(2)
-    st.session_state["costo_prod_des"] = d1.number_input("Peso de faltante", value=st.session_state["costo_prod_des"], step=0.1)
-    st.session_state["costo_inv_des"] = d2.number_input("Peso de inventario", value=st.session_state["costo_inv_des"], step=0.1)
+    st.markdown('<div class="info-box">Estos parámetros alteran cómo se reparte la producción entre líneas según preferencia por estabilidad, inventario o servicio.</div>', unsafe_allow_html=True)
+    d4, d5, d6 = st.columns(3)
+    st.session_state["costo_prod_des"] = d4.number_input("Peso de faltante", value=st.session_state["costo_prod_des"], step=0.1)
+    st.session_state["costo_inv_des"] = d5.number_input("Peso de inventario", value=st.session_state["costo_inv_des"], step=0.1)
+    st.session_state["suavizado_des"] = d6.slider("Suavidad del plan", 0.0, 1.0, st.session_state.get("suavizado_des", 0.35), 0.05)
+    d7, d8 = st.columns(2)
+    st.session_state["prioridad_horno"] = d7.slider("Prioridad a líneas de horno", 0.8, 1.3, st.session_state.get("prioridad_horno", 1.0), 0.05)
+    st.session_state["proteccion_mix"] = d8.slider("Protección del mix", 0.8, 1.3, st.session_state.get("proteccion_mix", 1.0), 0.05)
 
-with tabs[3]:
+with TABS[3]:
     st.markdown('<div class="sec-title">Ajuste operativo de la simulación</div>', unsafe_allow_html=True)
-    st.markdown('<div class="info-box">Aquí viven únicamente las variables de planta: estaciones, tiempos, fallas y comportamiento del horno.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="info-box">Variables de planta: estaciones, ritmos, ventanas de proceso y comportamiento operacional del sistema.</div>', unsafe_allow_html=True)
     s1, s2, s3, s4, s5, s6 = st.columns(6)
     st.session_state["mezcla_cap"] = s1.number_input("Mezcla", value=st.session_state["mezcla_cap"], step=1)
     st.session_state["dosificado_cap"] = s2.number_input("Dosificado", value=st.session_state["dosificado_cap"], step=1)
@@ -665,14 +719,11 @@ with tabs[3]:
     st.session_state["enfriamiento_cap"] = s4.number_input("Enfriamiento", value=st.session_state["enfriamiento_cap"], step=1)
     st.session_state["empaque_cap"] = s5.number_input("Empaque", value=st.session_state["empaque_cap"], step=1)
     st.session_state["amasado_cap"] = s6.number_input("Amasado", value=st.session_state["amasado_cap"], step=1)
-
     s7, s8, s9, s10 = st.columns(4)
     st.session_state["falla_horno"] = s7.checkbox("Activar fallas en horno", value=st.session_state["falla_horno"])
     st.session_state["doble_turno"] = s8.checkbox("Ritmo extendido", value=st.session_state["doble_turno"])
     st.session_state["temp_horno_base"] = s9.slider("Base térmica (°C)", 130, 190, st.session_state["temp_horno_base"])
     st.session_state["iter_sim"] = s10.slider("Corridas a promediar", 1, 10, st.session_state["iter_sim"])
-
-    st.markdown("**Ventanas de proceso (minutos)**")
     s11, s12, s13 = st.columns(3)
     st.session_state["tm"] = s11.slider("Mezcla", 5, 30, st.session_state["tm"])
     st.session_state["td"] = s12.slider("Dosificado", 5, 30, st.session_state["td"])
@@ -681,6 +732,9 @@ with tabs[3]:
     st.session_state["te"] = s14.slider("Enfriado", 20, 80, st.session_state["te"])
     st.session_state["tep"] = s15.slider("Empaque", 2, 20, st.session_state["tep"])
     st.session_state["ta"] = s16.slider("Amasado", 10, 35, st.session_state["ta"])
+    s17, s18 = st.columns(2)
+    st.session_state["variabilidad"] = s17.slider("Variabilidad operativa", 0.8, 1.5, st.session_state.get("variabilidad", 1.0), 0.05)
+    st.session_state["espaciamiento_lotes"] = s18.slider("Espaciamiento de lotes", 0.7, 1.4, st.session_state.get("espaciamiento_lotes", 1.0), 0.05)
 
 # tomar valores del estado
 mes_idx = int(st.session_state["mes_idx"])
