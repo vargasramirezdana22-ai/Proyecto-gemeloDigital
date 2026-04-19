@@ -173,16 +173,19 @@ def run_agregacion(dem_hh_items, params_tuple):
     CRt=params["CRt"]; COt=params["COt"]; Wm=params["CW_mas"]; Wd=params["CW_menos"]
     M=params["M"]; LRi=params["LR_inicial"]; stock_obj=params.get("stock_obj", 0.0)
 
-    mdl = LpProblem("Agregacion", LpMinimize)
-    P   = LpVariable.dicts("P",  MESES, lowBound=0)
-    I   = LpVariable.dicts("I",  MESES, lowBound=0)
-    S   = LpVariable.dicts("S",  MESES, lowBound=0)
-    LR  = LpVariable.dicts("LR", MESES, lowBound=0)
-    LO  = LpVariable.dicts("LO", MESES, lowBound=0)
-    LU  = LpVariable.dicts("LU", MESES, lowBound=0)
-    NI  = LpVariable.dicts("NI", MESES)
-    Wmas   = LpVariable.dicts("Wm", MESES, lowBound=0)
-    Wmenos = LpVariable.dicts("Wd", MESES, lowBound=0)
+    # Sufijo único por combinación de parámetros para evitar conflictos
+    # de nombres en el registro global de PuLP entre llamadas cacheadas
+    _uid = str(abs(hash((dem_hh_items, params_tuple))) % 999983)
+    mdl = LpProblem(f"Agregacion_{_uid}", LpMinimize)
+    P   = LpVariable.dicts(f"P_{_uid}",  MESES, lowBound=0)
+    I   = LpVariable.dicts(f"I_{_uid}",  MESES, lowBound=0)
+    S   = LpVariable.dicts(f"S_{_uid}",  MESES, lowBound=0)
+    LR  = LpVariable.dicts(f"LR_{_uid}", MESES, lowBound=0)
+    LO  = LpVariable.dicts(f"LO_{_uid}", MESES, lowBound=0)
+    LU  = LpVariable.dicts(f"LU_{_uid}", MESES, lowBound=0)
+    NI  = LpVariable.dicts(f"NI_{_uid}", MESES)
+    Wmas   = LpVariable.dicts(f"Wm_{_uid}", MESES, lowBound=0)
+    Wmenos = LpVariable.dicts(f"Wd_{_uid}", MESES, lowBound=0)
 
     mdl += lpSum(Ct*P[t]+Ht*I[t]+PIt*S[t]+CRt*LR[t]+COt*LO[t]+Wm*Wmas[t]+Wd*Wmenos[t]
                  for t in MESES)
@@ -227,11 +230,14 @@ def run_desagregacion(prod_hh_items, dem_hist_items, costo_pen, costo_inv, suavi
     prod_hh  = dict(prod_hh_items)
     dem_hist = {p: list(v) for p, v in dem_hist_items}
 
-    mdl = LpProblem("Desagregacion", LpMinimize)
-    X  = {(p,t): LpVariable(f"X_{p}_{t}", lowBound=0) for p in PRODUCTOS for t in MESES}
-    I  = {(p,t): LpVariable(f"I_{p}_{t}", lowBound=0) for p in PRODUCTOS for t in MESES}
-    S  = {(p,t): LpVariable(f"S_{p}_{t}", lowBound=0) for p in PRODUCTOS for t in MESES}
-    DX = {(p,t): LpVariable(f"DX_{p}_{t}", lowBound=0) for p in PRODUCTOS for t in MESES}
+    # Sufijo único por combinación de parámetros para evitar conflictos
+    # de nombres en el registro global de PuLP entre llamadas cacheadas
+    _uid = str(abs(hash((prod_hh_items, dem_hist_items, costo_pen, costo_inv, suavizado))) % 999983)
+    mdl = LpProblem(f"Desagregacion_{_uid}", LpMinimize)
+    X  = {(p,t): LpVariable(f"X_{_uid}_{p}_{t}", lowBound=0) for p in PRODUCTOS for t in MESES}
+    I  = {(p,t): LpVariable(f"I_{_uid}_{p}_{t}", lowBound=0) for p in PRODUCTOS for t in MESES}
+    S  = {(p,t): LpVariable(f"S_{_uid}_{p}_{t}", lowBound=0) for p in PRODUCTOS for t in MESES}
+    DX = {(p,t): LpVariable(f"DX_{_uid}_{p}_{t}", lowBound=0) for p in PRODUCTOS for t in MESES}
 
     mdl += lpSum(costo_inv*I[p,t]+costo_pen*S[p,t]+suavizado*DX[p,t]
                  for p in PRODUCTOS for t in MESES)
@@ -1488,4 +1494,5 @@ st.markdown("""
   🥐 <b>Gemelo Digital — Panadería Dora del Hoyo v4.0</b> &nbsp;·&nbsp;
   Optimización LP · Desagregación · SimPy · Streamlit
 </div>""", unsafe_allow_html=True)
+
 
