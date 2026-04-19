@@ -1,0 +1,4 @@
+rename gitignore .gitignore
+git add .gitignore
+git commit -m "agrego gitignore"
+git push
