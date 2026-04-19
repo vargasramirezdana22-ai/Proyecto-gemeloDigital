@@ -439,9 +439,9 @@ with tabs[0]:
                         line=dict(color=PROD_COLORS_DARK[p],width=2)),
             legendgroup=p, showlegend=False,
         ))
-    fig_pro.add_vline(x=MESES_ES[-1], line_dash="dot", line_color="#C68B59",
-                      annotation_text="▶ Pronóstico", annotation_font_color="#C68B59",
-                      annotation_position="top right")
+    fig_pro.add_vline(x=len(MESES_ES) - 1, line_dash="dot", line_color="#C68B59",
+                  annotation_text="▶ Pronóstico", annotation_font_color="#C68B59",
+                  annotation_position="top right")
     fig_pro.update_layout(
         **PLOT_CFG, height=400,
         title="Demanda Histórica & Proyección de Demanda — Dora del Hoyo",
