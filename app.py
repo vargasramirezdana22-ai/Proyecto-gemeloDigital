@@ -57,6 +57,14 @@ PROD_LABELS = {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
+# HELPER: hex → rgba (compatible con todas las versiones de Plotly)
+# ══════════════════════════════════════════════════════════════════════════════
+def hex_rgba(hex_color, alpha=0.15):
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+# ══════════════════════════════════════════════════════════════════════════════
 # DATOS MAESTROS
 # ══════════════════════════════════════════════════════════════════════════════
 PRODUCTOS = ["Brownies","Mantecadas","Mantecadas_Amapola","Torta_Naranja","Pan_Maiz"]
@@ -423,13 +431,11 @@ with tabs[0]:
     for i, p in enumerate(PRODUCTOS):
         serie=[v*factor_demanda for v in DEM_HISTORICA[p]]
         suav, futuro = pronostico_simple(serie, meses_pronostico)
-        # Histórico
         fig_pro.add_trace(go.Scatter(
             x=MESES_ES, y=serie, mode="lines", name=PROD_LABELS[p],
             line=dict(color=PROD_COLORS_DARK[p], width=2.2),
             legendgroup=p, showlegend=True,
         ))
-        # Pronóstico futuro
         meses_fut=[f"P+{j+1}" for j in range(meses_pronostico)]
         x_fut=[MESES_ES[-1]]+meses_fut; y_fut=[suav[-1]]+futuro
         fig_pro.add_trace(go.Scatter(
@@ -439,9 +445,10 @@ with tabs[0]:
                         line=dict(color=PROD_COLORS_DARK[p],width=2)),
             legendgroup=p, showlegend=False,
         ))
-    fig_pro.add_vline(x=len(MESES_ES) - 1, line_dash="dot", line_color="#C68B59",
-                  annotation_text="▶ Pronóstico", annotation_font_color="#C68B59",
-                  annotation_position="top right")
+    # FIX: usar índice numérico en lugar de string categórico
+    fig_pro.add_vline(x=len(MESES_ES)-1, line_dash="dot", line_color="#C68B59",
+                      annotation_text="▶ Pronóstico", annotation_font_color="#C68B59",
+                      annotation_position="top right")
     fig_pro.update_layout(
         **PLOT_CFG, height=400,
         title="Demanda Histórica & Proyección de Demanda — Dora del Hoyo",
@@ -629,26 +636,13 @@ with tabs[2]:
     st.markdown('<div class="sec-title">📦 Inventario final proyectado</div>', unsafe_allow_html=True)
     fig_inv=go.Figure()
     for p in PRODUCTOS:
-        color = PROD_COLORS[p]
-        # Convertir hex a rgba para la transparencia
-        r = int(color[1:3], 16)
-        g = int(color[3:5], 16)
-        b = int(color[5:7], 16)
-        fill_rgba = f"rgba({r},{g},{b},0.15)"
-    
-    fig_inv.add_trace(go.Scatter(x=desag[p]["Mes_ES"],y=desag[p]["Inv_Fin"],
-                                 name=PROD_LABELS[p],mode="lines+markers",
-                                 line=dict(color=PROD_COLORS_DARK[p],width=2),
-                                 marker=dict(size=7,color=PROD_COLORS[p],
-                                             line=dict(color=PROD_COLORS_DARK[p],width=1.5)),
-                                 fill="tozeroy",fillcolor=fill_rgba))
-    
-    fig_inv.add_trace(go.Scatter(x=desag[p]["Mes_ES"],y=desag[p]["Inv_Fin"],
-                                 name=PROD_LABELS[p],mode="lines+markers",
-                                 line=dict(color=PROD_COLORS_DARK[p],width=2),
-                                 marker=dict(size=7,color=PROD_COLORS[p],
-                                             line=dict(color=PROD_COLORS_DARK[p],width=1.5)),
-                                 fill="tozeroy",fillcolor=fill_rgba))
+        # FIX: usar hex_rgba en lugar de hex+"28"
+        fig_inv.add_trace(go.Scatter(x=desag[p]["Mes_ES"],y=desag[p]["Inv_Fin"],
+                                     name=PROD_LABELS[p],mode="lines+markers",
+                                     line=dict(color=PROD_COLORS_DARK[p],width=2),
+                                     marker=dict(size=7,color=PROD_COLORS[p],
+                                                 line=dict(color=PROD_COLORS_DARK[p],width=1.5)),
+                                     fill="tozeroy",fillcolor=hex_rgba(PROD_COLORS[p],0.16)))
     fig_inv.update_layout(**PLOT_CFG,height=280,xaxis_title="Mes",yaxis_title="Unidades en inventario",
                           legend=dict(orientation="h",y=-0.28,x=0.5,xanchor="center"),
                           xaxis=dict(showgrid=False),yaxis=dict(gridcolor="#F0E8D8"))
@@ -804,11 +798,13 @@ with tabs[4]:
                   delta_color="inverse" if excesos else "off")
 
         fig_temp=go.Figure()
-        fig_temp.add_hrect(y0=150,y1=200,fillcolor=C["mint"]+"35",line_width=0,
+        # FIX: usar hex_rgba en lugar de hex+"35" y hex+"22"
+        fig_temp.add_hrect(y0=150,y1=200,fillcolor=hex_rgba(C["mint"],0.21),line_width=0,
                            annotation_text="Zona operativa óptima",annotation_font_color=C["sage"])
         fig_temp.add_trace(go.Scatter(x=df_sensores["tiempo"],y=df_sensores["temperatura"],
                                       mode="lines",name="Temperatura",fill="tozeroy",
-                                      fillcolor=C["peach"]+"22",line=dict(color=C["mocha"],width=1.8)))
+                                      fillcolor=hex_rgba(C["peach"],0.13),
+                                      line=dict(color=C["mocha"],width=1.8)))
         if len(df_sensores)>10:
             mm=df_sensores["temperatura"].rolling(5,min_periods=1).mean()
             fig_temp.add_trace(go.Scatter(x=df_sensores["tiempo"],y=mm,mode="lines",
@@ -825,7 +821,7 @@ with tabs[4]:
         with col_s1:
             fig_ocup=go.Figure()
             fig_ocup.add_trace(go.Scatter(x=df_sensores["tiempo"],y=df_sensores["horno_ocup"],
-                                          mode="lines",fill="tozeroy",fillcolor=C["sky"]+"40",
+                                          mode="lines",fill="tozeroy",fillcolor=hex_rgba(C["sky"],0.25),
                                           line=dict(color="#4A90C4",width=2),name="Ocupación"))
             fig_ocup.add_hline(y=cap_horno,line_dash="dot",line_color=C["mocha"],
                                annotation_text=f"Cap. máx: {cap_horno}")
@@ -945,9 +941,12 @@ with tabs[5]:
                     df_norm[c]=(df_norm[c]-df_norm[c].min())/rng if rng else 0.5
 
                 COLORES_R=[C["caramel"],C["sky"],C["rose"],C["mint"],C["lavender"],C["peach"],C["butter"],C["sage"]]
-                RGBA_R=["rgba(242,194,122,0.15)","rgba(168,209,240,0.15)","rgba(244,167,185,0.15)",
-                        "rgba(168,216,185,0.15)","rgba(201,184,232,0.15)","rgba(255,183,160,0.15)",
-                        "rgba(249,228,160,0.15)","rgba(181,205,163,0.15)"]
+                RGBA_R=[
+                    hex_rgba(C["caramel"],0.15), hex_rgba(C["sky"],0.15),
+                    hex_rgba(C["rose"],0.15),    hex_rgba(C["mint"],0.15),
+                    hex_rgba(C["lavender"],0.15),hex_rgba(C["peach"],0.15),
+                    hex_rgba(C["butter"],0.15),  hex_rgba(C["sage"],0.15),
+                ]
 
                 fig_radar=go.Figure()
                 for i,row in df_comp.iterrows():
