@@ -318,115 +318,143 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 
-html, body, [class*="css"] {
-  font-family: 'DM Sans', sans-serif;
-  background: #FFFDF8;
-  color: #46352A;
-}
+/* ── BASE ── */
+html, body { background-color: #FFFDF8 !important; color: #46352A !important; }
+[class*="css"], .stApp { font-family: 'DM Sans', sans-serif !important; }
+.stApp { background-color: #FFFDF8 !important; }
+.block-container { background-color: #FFFDF8 !important; padding-top: 1.5rem !important; }
 
+/* ── HERO ── */
 .hero {
-  background: linear-gradient(135deg, #46352A 0%, #8B5E3C 45%, #D4A574 80%, #FCE7A8 100%);
-  padding: 2.2rem 3rem 1.8rem;
-  border-radius: 24px;
-  margin-bottom: 1.8rem;
-  box-shadow: 0 20px 60px rgba(70,53,42,0.22);
+  background: linear-gradient(135deg, #3D1C02 0%, #8B5E3C 45%, #D4A574 80%, #FCE7A8 100%);
+  padding: 2.4rem 3rem 2rem;
+  border-radius: 28px;
+  margin-bottom: 2rem;
+  box-shadow: 0 24px 70px rgba(61,28,2,0.28);
   position: relative; overflow: hidden;
 }
 .hero::before {
   content: "🥐";
-  font-size: 11rem;
-  position: absolute; right: 2rem; top: -2rem;
-  opacity: 0.08; transform: rotate(-20deg);
+  font-size: 13rem;
+  position: absolute; right: 1.5rem; top: -2.5rem;
+  opacity: 0.07; transform: rotate(-18deg);
   pointer-events: none;
 }
 .hero::after {
   content: "";
   position: absolute; inset: 0;
-  background: radial-gradient(circle at 80% 50%, rgba(252,231,168,0.12) 0%, transparent 60%);
-  border-radius: 24px;
+  background: radial-gradient(circle at 75% 50%, rgba(252,231,168,0.15) 0%, transparent 65%);
+  border-radius: 28px;
 }
 .hero h1 {
   font-family: 'Cormorant Garamond', serif;
-  color: #FFFDF8; font-size: 2.6rem; margin: 0;
-  letter-spacing: -0.5px; font-weight: 700;
+  color: #FFFDF8; font-size: 2.8rem; margin: 0;
+  letter-spacing: -0.5px; font-weight: 700; position: relative; z-index: 1;
 }
-.hero p { color: #FCE7A8; margin: 0.4rem 0 0; font-size: 0.95rem; font-weight: 300; }
+.hero p { color: #FCE7A8; margin: 0.45rem 0 0; font-size: 0.97rem; font-weight: 300; position: relative; z-index: 1; }
 .hero .badge {
   display: inline-block;
-  background: rgba(255,255,255,0.12);
-  color: #FFFDF8; border: 1px solid rgba(255,255,255,0.22);
-  padding: 0.22rem 0.8rem; border-radius: 20px;
-  font-size: 0.76rem; margin-top: 0.7rem; margin-right: 0.4rem;
-  backdrop-filter: blur(4px);
+  background: rgba(255,255,255,0.13);
+  color: #FFFDF8; border: 1px solid rgba(255,255,255,0.25);
+  padding: 0.25rem 0.9rem; border-radius: 20px;
+  font-size: 0.78rem; margin-top: 0.8rem; margin-right: 0.45rem;
+  backdrop-filter: blur(6px); position: relative; z-index: 1;
 }
 
+/* ── KPI CARDS ── */
 .kpi-card {
   background: #FFFFFF;
-  border-radius: 18px;
-  padding: 1.2rem 1rem;
-  box-shadow: 0 4px 20px rgba(70,53,42,0.06);
-  border: 1px solid #EADFD7;
+  border-radius: 20px;
+  padding: 1.3rem 1rem 1.1rem;
+  box-shadow: 0 4px 22px rgba(70,53,42,0.07);
+  border: 1.5px solid #EADFD7;
   text-align: center;
-  transition: transform 0.25s, box-shadow 0.25s;
+  transition: transform 0.22s, box-shadow 0.22s;
 }
-.kpi-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 32px rgba(70,53,42,0.12);
-}
-.kpi-card .icon { font-size: 1.8rem; margin-bottom: 0.3rem; }
+.kpi-card:hover { transform: translateY(-5px); box-shadow: 0 14px 36px rgba(70,53,42,0.14); }
+.kpi-card .icon { font-size: 1.9rem; margin-bottom: 0.35rem; }
 .kpi-card .val {
   font-family: 'Cormorant Garamond', serif;
-  font-size: 1.9rem; color: #46352A; line-height: 1; margin: 0.15rem 0;
-  font-weight: 700;
+  font-size: 2rem; color: #46352A; line-height: 1; margin: 0.18rem 0; font-weight: 700;
 }
-.kpi-card .lbl { font-size: 0.68rem; color: #B9857E; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600; }
-.kpi-card .sub { font-size: 0.75rem; color: #9B7B5A; margin-top: 0.25rem; }
+.kpi-card .lbl { font-size: 0.67rem; color: #B9857E; text-transform: uppercase; letter-spacing: 1.3px; font-weight: 600; }
+.kpi-card .sub { font-size: 0.76rem; color: #9B7B5A; margin-top: 0.28rem; }
 
+/* ── SECTION TITLES ── */
 .sec-title {
   font-family: 'Cormorant Garamond', serif;
-  font-size: 1.35rem; color: #46352A;
+  font-size: 1.4rem; color: #46352A;
   border-left: 4px solid #E8C27A;
-  padding-left: 0.8rem;
-  margin: 1.6rem 0 0.9rem;
+  padding-left: 0.85rem;
+  margin: 1.8rem 0 0.9rem;
   font-weight: 600;
 }
+
+/* ── INFO BOX ── */
 .info-box {
-  background: linear-gradient(135deg, rgba(252,231,168,0.25), rgba(255,253,248,0.9));
-  border: 1px solid rgba(232,194,122,0.45);
+  background: linear-gradient(135deg, rgba(252,231,168,0.28), rgba(255,253,248,0.95));
+  border: 1px solid rgba(232,194,122,0.5);
   border-radius: 14px;
-  padding: 0.85rem 1.1rem;
+  padding: 0.9rem 1.15rem;
   font-size: 0.87rem; color: #46352A;
-  margin: 0.5rem 0 0.9rem;
-}
-.pill-ok {
-  background: #CFE9D9; color: #1B5E20;
-  padding: 0.3rem 1rem; border-radius: 20px;
-  font-size: 0.83rem; font-weight: 600; display: inline-block;
-}
-.pill-warn {
-  background: #F6C9D0; color: #880E2E;
-  padding: 0.3rem 1rem; border-radius: 20px;
-  font-size: 0.83rem; font-weight: 600; display: inline-block;
+  margin: 0.5rem 0 1rem;
 }
 
-/* Sidebar */
-[data-testid="stSidebar"] { background: #2C1A0E !important; }
-[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] p,
-[data-testid="stSidebar"] span,
-[data-testid="stSidebar"] div { color: #FCE7A8 !important; }
+/* ── PARAM BOX (nueva) ── */
+.param-box {
+  background: linear-gradient(135deg, rgba(207,228,246,0.25), rgba(255,253,248,0.95));
+  border: 1px solid rgba(207,228,246,0.7);
+  border-radius: 14px;
+  padding: 0.9rem 1.15rem;
+  font-size: 0.86rem; color: #46352A;
+  margin: 0.5rem 0 1rem;
+}
+.param-box b { color: #4A8DB5; }
+
+/* ── PILLS ── */
+.pill-ok  { background: #CFE9D9; color: #1B5E20; padding: 0.3rem 1rem; border-radius: 20px; font-size: 0.83rem; font-weight: 600; display: inline-block; }
+.pill-warn{ background: #F6C9D0; color: #880E2E; padding: 0.3rem 1rem; border-radius: 20px; font-size: 0.83rem; font-weight: 600; display: inline-block; }
+
+/* ── SIDEBAR ── */
+[data-testid="stSidebar"] > div:first-child {
+  background-color: #2C1A0E !important;
+}
+[data-testid="stSidebar"] {
+  background-color: #2C1A0E !important;
+}
+[data-testid="stSidebar"] * { color: #FCE7A8 !important; }
+[data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {
   color: #E8C27A !important;
   font-family: 'Cormorant Garamond', serif !important;
 }
-[data-testid="stSidebar"] hr { border-color: rgba(232,194,122,0.3) !important; }
+[data-testid="stSidebar"] .stMarkdown p { color: #FCE7A8 !important; }
+[data-testid="stSidebar"] hr { border-color: rgba(232,194,122,0.35) !important; }
+[data-testid="stSidebar"] [data-baseweb="slider"] div { background: #E8C27A !important; }
+[data-testid="stSidebar"] input { background: rgba(255,255,255,0.08) !important; color: #FCE7A8 !important; }
+[data-testid="stSidebar"] .stExpander { border-color: rgba(232,194,122,0.3) !important; }
+[data-testid="stSidebar"] .stCheckbox label { color: #FCE7A8 !important; }
+[data-testid="stSidebar"] [data-baseweb="select"] { background: rgba(255,255,255,0.08) !important; }
 
+/* ── TABS ── */
+.stTabs [data-baseweb="tab-list"] {
+  background: rgba(234,223,215,0.3);
+  border-radius: 12px; padding: 0.2rem;
+}
 .stTabs [data-baseweb="tab"] {
   font-family: 'DM Sans', sans-serif;
   font-weight: 500; color: #9B7B5A;
+  border-radius: 10px; padding: 0.5rem 1rem;
 }
-.stTabs [aria-selected="true"] { color: #46352A !important; }
+.stTabs [aria-selected="true"] {
+  color: #46352A !important;
+  background: white !important;
+  box-shadow: 0 2px 8px rgba(70,53,42,0.12) !important;
+}
+
+/* ── EXPANDERS ── */
+.streamlit-expanderHeader { color: #46352A !important; font-weight: 600 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -436,6 +464,8 @@ html, body, [class*="css"] {
 with st.sidebar:
     st.markdown("## 🥐 Dora del Hoyo")
     st.markdown("*Gemelo Digital v3.0*")
+    st.markdown("---")
+    st.markdown("<div style='font-size:0.75rem;color:#E8C27A;padding:0.3rem 0 0.6rem'>⚙️ Los parámetros globales afectan TODO el modelo. Los específicos de cada módulo solo impactan esa sección.</div>", unsafe_allow_html=True)
     st.markdown("---")
 
     # ── 1. PARÁMETROS GLOBALES ──────────────────────────────────────────────
@@ -635,6 +665,28 @@ with tabs[0]:
     st.markdown('<div class="sec-title">📈 Demanda histórica y pronóstico por producto</div>', unsafe_allow_html=True)
     st.markdown('<div class="info-box">Datos ajustados por mix de producto y factor de impulso global · Suavizado exponencial α=0.3 · Las líneas punteadas representan la proyección futura.</div>', unsafe_allow_html=True)
 
+    # ── PARÁMETROS PROPIOS DE DEMANDA ─────────────────────────────────────
+    with st.expander("🎛️ Parámetros de Demanda & Proyección — activos en esta sección", expanded=False):
+        st.markdown('<div class="param-box"><b>Mix de productos:</b> cambian el peso relativo de cada producto. Simulan promociones, estacionalidad o cambios de preferencia del cliente. Solo afectan la demanda base (no costos ni producción directamente).</div>', unsafe_allow_html=True)
+        pc1, pc2, pc3 = st.columns(3)
+        with pc1:
+            st.markdown("**🍫 Mix por producto**")
+            st.metric("Brownies",      f"×{mix_brownies:.2f}")
+            st.metric("Mantecadas",    f"×{mix_mantecadas:.2f}")
+            st.metric("Mant. Amapola", f"×{mix_amapola:.2f}")
+            st.metric("Torta Naranja", f"×{mix_torta:.2f}")
+            st.metric("Pan de Maíz",   f"×{mix_panmaiz:.2f}")
+        with pc2:
+            st.markdown("**📈 Impulso global**")
+            st.metric("Factor de demanda", f"×{factor_demanda:.2f}")
+            st.metric("Horizonte pronóstico", f"{meses_pronostico} meses")
+        with pc3:
+            st.markdown("**📊 Resultado**")
+            total_dem = sum(sum(DEM_HIST[p]) for p in PRODUCTOS)
+            st.metric("Demanda total anual", f"{total_dem:,.0f} und")
+            st.metric("Productos activos", f"{len(PRODUCTOS)}")
+        st.caption("💡 Ajusta mix_brownies, mix_mantecadas, mix_tortas, factor_demanda y meses_pronostico en la barra lateral izquierda para modificar estos valores.")
+
     fig_pro=go.Figure()
     for p in PRODUCTOS:
         serie=DEM_HIST[p]
@@ -718,6 +770,35 @@ with tabs[1]:
                 f'Eficiencia efectiva: <b>{factor_ef*100:.1f}%</b> → Capacidad: <b>{LR_inicial:,.0f} H-H/mes</b> · Stock seguridad: {stock_obj*100:.0f}%</div>',
                 unsafe_allow_html=True)
 
+    # ── PARÁMETROS PROPIOS DE AGREGACIÓN ──────────────────────────────────
+    with st.expander("⚙️ Parámetros de Planeación Agregada — activos en esta sección", expanded=False):
+        st.markdown('<div class="param-box"><b>Corazón matemático del modelo (optimización LP):</b> Los costos penalizan producción, inventario y backlog. La capacidad laboral determina las horas-hombre disponibles. Los factores estratégicos ajustan la realidad operativa.</div>', unsafe_allow_html=True)
+        pa1, pa2, pa3 = st.columns(3)
+        with pa1:
+            st.markdown("**💰 Costos (COP)**")
+            st.metric("Prod/und (Ct)",      f"${ct:,}")
+            st.metric("Inventario (Ht)",    f"${ht:,}")
+            st.metric("Backlog (PIt)",      f"${pit:,}")
+            st.metric("Hora regular (CRt)", f"${crt:,}")
+            st.metric("Hora extra (COt)",   f"${cot:,}")
+            st.metric("Contratar (CW+)",    f"${cwp:,}")
+            st.metric("Despedir (CW−)",     f"${cwm:,}")
+        with pa2:
+            st.markdown("**👷 Capacidad Laboral**")
+            st.metric("Trabajadores",   f"{trab}")
+            st.metric("Turnos/día",     f"{turnos_dia}")
+            st.metric("Horas/turno",    f"{horas_turno}h")
+            st.metric("Días/mes",       f"{dias_mes}")
+            st.metric("Cap. efectiva",  f"{LR_inicial:,.0f} H-H/mes")
+        with pa3:
+            st.markdown("**⚡ Factores Estratégicos**")
+            st.metric("Eficiencia",          f"{eficiencia}%")
+            st.metric("Ausentismo",          f"{ausentismo}%")
+            st.metric("Flexibilidad HH",     f"{flexibilidad}%")
+            st.metric("Stock seguridad",     f"{stock_obj*100:.0f}% demanda")
+            st.metric("Factor efectivo total", f"{factor_ef*100:.1f}%")
+        st.caption("💡 Modifica estos parámetros en la barra lateral sección '3 · Planeación Agregada'.")
+
     m1,m2,m3,m4=st.columns(4)
     m1.metric("💰 Costo Total",    f"${costo:,.0f} COP")
     m2.metric("⏰ Horas Extra",     f"{df_agr['Horas_Extras'].sum():,.0f} H-H")
@@ -781,12 +862,129 @@ with tabs[2]:
     st.markdown(f'<div class="info-box">Plan en H-H convertido a unidades via LP · Suavizado: {suavizado_des} · '
                 f'Penalización backlog: ${costo_pen_des:,} · Inventario: ${costo_inv_des:,}</div>', unsafe_allow_html=True)
 
+    # ── PARÁMETROS PROPIOS DE DESAGREGACIÓN ───────────────────────────────
+    with st.expander("🔧 Parámetros de Desagregación — activos en esta sección", expanded=False):
+        st.markdown('<div class="param-box"><b>Baja el plan agregado a nivel de producto individual:</b> aquí decides si priorizas servicio (bajo backlog) o eficiencia de inventario, y si quieres estabilidad o agresividad en los cambios de producción.</div>', unsafe_allow_html=True)
+        pd1, pd2 = st.columns(2)
+        with pd1:
+            st.markdown("**📦 Penalizaciones**")
+            st.metric("Penalización backlog", f"${costo_pen_des:,}", help="Mayor valor → prioriza cumplir demanda")
+            st.metric("Costo inventario/und", f"${costo_inv_des:,}", help="Mayor valor → reduce inventario")
+            st.metric("Suavizado producción", f"{suavizado_des}", help="Mayor valor → evita cambios bruscos")
+        with pd2:
+            st.markdown("**🎯 Estrategia**")
+            _ratio = costo_pen_des / max(costo_inv_des, 1)
+            st.metric("Ratio backlog/inventario", f"{_ratio:.1f}×",
+                      delta="Orientado a servicio" if _ratio > 1 else "Orientado a inventario")
+            st.metric("Protección de mix", "✓ Activa" if proteccion_mix else "✗ Libre")
+        st.caption("💡 Modifica estos parámetros en la barra lateral sección '4 · Desagregación'.")
+
     mes_resaltar=st.selectbox("Mes a resaltar ★",range(12),index=mes_idx,format_func=lambda i:MESES_F[i],key="mes_desag")
     mes_nm_desag=MESES[mes_resaltar]
 
+    # ── GRÁFICO CONSOLIDADO: TODOS LOS PRODUCTOS ─────────────────────────
+    st.markdown('<div class="sec-title">🌟 Vista Global — Producción, Inventario & Demanda (todos los productos)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="info-box">Consolidado anual de los tres flujos críticos del negocio para <b>todos los productos</b>. Compara la producción total vs demanda total y observa el comportamiento del inventario mes a mes.</div>', unsafe_allow_html=True)
+
+    # Calcular consolidados
+    meses_es = MESES_ES
+    prod_total_mes   = [sum(desag[p].loc[desag[p]["Mes"]==m,"Produccion"].values[0] for p in PRODUCTOS) for m in MESES]
+    dem_total_mes    = [sum(desag[p].loc[desag[p]["Mes"]==m,"Demanda"].values[0]    for p in PRODUCTOS) for m in MESES]
+    inv_total_mes    = [sum(desag[p].loc[desag[p]["Mes"]==m,"Inv_Fin"].values[0]    for p in PRODUCTOS) for m in MESES]
+    backlog_total    = [sum(desag[p].loc[desag[p]["Mes"]==m,"Backlog"].values[0]    for p in PRODUCTOS) for m in MESES]
+
+    fig_global = make_subplots(
+        rows=3, cols=1,
+        row_heights=[0.45, 0.28, 0.27],
+        shared_xaxes=True,
+        vertical_spacing=0.06,
+        subplot_titles=[
+            "📦 Producción vs Demanda Total (unidades)",
+            "🗄️ Inventario Final Consolidado",
+            "⚠️ Backlog Total",
+        ]
+    )
+
+    # ── Fila 1: Producción (barras) + Demanda (línea) ──
+    colores_meses = [C["gold"] if i==mes_idx else C["butter"] for i in range(12)]
+    fig_global.add_trace(go.Bar(
+        x=meses_es, y=prod_total_mes,
+        name="Producción", marker_color=colores_meses, opacity=0.88,
+        marker_line_color=C["mocha"], marker_line_width=1.2,
+        hovertemplate="%{x}: <b>%{y:,.0f} und</b> producidas<extra></extra>",
+    ), row=1, col=1)
+    fig_global.add_trace(go.Scatter(
+        x=meses_es, y=dem_total_mes,
+        name="Demanda", mode="lines+markers",
+        line=dict(color=C["rose_d"], width=3, dash="dash"),
+        marker=dict(size=9, color=C["rose"], line=dict(color=C["rose_d"], width=2)),
+        hovertemplate="%{x}: <b>%{y:,.0f} und</b> demanda<extra></extra>",
+    ), row=1, col=1)
+    # Brecha fill
+    fig_global.add_trace(go.Scatter(
+        x=meses_es, y=prod_total_mes,
+        fill=None, mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip",
+    ), row=1, col=1)
+    fig_global.add_trace(go.Scatter(
+        x=meses_es, y=dem_total_mes,
+        fill="tonexty", fillcolor=hex_rgba(C["rose"], 0.12),
+        mode="lines", line=dict(width=0), name="Brecha", showlegend=True, hoverinfo="skip",
+    ), row=1, col=1)
+    # Marker mes seleccionado
+    fig_global.add_trace(go.Scatter(
+        x=[meses_es[mes_idx]], y=[prod_total_mes[mes_idx]],
+        mode="markers", marker=dict(size=18, color=C["gold"], symbol="star",
+                                     line=dict(color=C["mocha"], width=2)),
+        name=f"★ {MESES_F[mes_idx]}", showlegend=True,
+    ), row=1, col=1)
+
+    # ── Fila 2: Inventario ──
+    fig_global.add_trace(go.Scatter(
+        x=meses_es, y=inv_total_mes,
+        fill="tozeroy", mode="lines+markers",
+        fillcolor=hex_rgba(C["mint"], 0.38),
+        line=dict(color="#5BAF7A", width=2.5),
+        marker=dict(size=8, color="#5BAF7A", line=dict(color="#2D7A4F", width=1.5)),
+        name="Inventario Final",
+        hovertemplate="%{x}: <b>%{y:,.0f} und</b> en inventario<extra></extra>",
+    ), row=2, col=1)
+
+    # ── Fila 3: Backlog ──
+    colores_bl = [C["rose"] if v > 0 else C["mint"] for v in backlog_total]
+    fig_global.add_trace(go.Bar(
+        x=meses_es, y=backlog_total,
+        name="Backlog", marker_color=colores_bl, opacity=0.85,
+        marker_line_color="white", marker_line_width=1,
+        hovertemplate="%{x}: <b>%{y:,.0f} und</b> backlog<extra></extra>",
+    ), row=3, col=1)
+
+    fig_global.update_layout(
+        **PLOT_CFG, height=620, barmode="group",
+        title=dict(text="Flujos de Producción, Inventario & Demanda — Vista Anual Consolidada",
+                   font=dict(family="Cormorant Garamond", size=16, color="#46352A")),
+        legend=dict(orientation="h", y=-0.08, x=0.5, xanchor="center",
+                    bgcolor="rgba(255,253,248,0.8)", bordercolor=C["border"], borderwidth=1),
+        margin=dict(t=70, b=20),
+    )
+    fig_global.update_xaxes(showgrid=False)
+    fig_global.update_yaxes(gridcolor="#F0E8D8", row=1, col=1, title_text="Unidades")
+    fig_global.update_yaxes(gridcolor="#F0E8D8", row=2, col=1, title_text="Und inv.")
+    fig_global.update_yaxes(gridcolor="#F0E8D8", row=3, col=1, title_text="Und backlog")
+    st.plotly_chart(fig_global, use_container_width=True)
+
+    # ── Métricas resumen rápido ──────────────────────────────────────────
+    mg1, mg2, mg3, mg4 = st.columns(4)
+    mg1.metric("📦 Producción total anual",  f"{sum(prod_total_mes):,.0f} und")
+    mg2.metric("📈 Demanda total anual",     f"{sum(dem_total_mes):,.0f} und")
+    mg3.metric("🗄️ Inv. promedio mensual",   f"{sum(inv_total_mes)/12:,.0f} und")
+    mg4.metric("⚠️ Backlog total",           f"{sum(backlog_total):,.0f} und",
+               delta="OK" if sum(backlog_total)==0 else f"⚠️ {sum(backlog_total):,.0f}")
+
+    st.markdown("---")
+
     # ── Gráfico COMBINADO: Producción + Inventario + Demanda ──────────────
-    st.markdown('<div class="sec-title">📊 Producción · Inventario · Demanda — Vista combinada</div>', unsafe_allow_html=True)
-    st.markdown('<div class="info-box">Vista consolidada de los tres flujos críticos del negocio: qué se produce, qué queda en inventario y cuánto se demanda, mes a mes por producto.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-title">📊 Análisis por producto — Producción · Inventario · Demanda</div>', unsafe_allow_html=True)
+    st.markdown('<div class="info-box">Vista detallada de los tres flujos críticos para un producto específico: qué se produce, qué queda en inventario y cuánto se demanda, mes a mes.</div>', unsafe_allow_html=True)
 
     prod_sel_combo = st.selectbox("Producto a analizar", PRODUCTOS, format_func=lambda p: PROD_LABELS[p], key="combo_prod")
     df_combo = desag[prod_sel_combo]
@@ -940,6 +1138,32 @@ with tabs[3]:
     st.markdown(f'<div class="info-box">SimPy · Variabilidad: {variabilidad}× · Espaciamiento lotes: {espaciamiento}× · '
                 f'Capacidades: Mezcla={mezcla_cap} | Dosificado={dosificado_cap} | Horno={cap_horno} | '
                 f'Enfriamiento={enfriamiento_cap} | Empaque={empaque_cap} | Amasado={amasado_cap}</div>', unsafe_allow_html=True)
+
+    # ── PARÁMETROS PROPIOS DE SIMULACIÓN ──────────────────────────────────
+    with st.expander("🏗️ Parámetros de Simulación Operativa — activos en esta sección", expanded=False):
+        st.markdown('<div class="param-box"><b>Gemelo digital de la planta:</b> simula cuellos de botella, tiempos reales, saturación y comportamiento dinámico. Aquí vive lo más potente del modelo.</div>', unsafe_allow_html=True)
+        ps1, ps2, ps3 = st.columns(3)
+        with ps1:
+            st.markdown("**🏗️ Capacidades por recurso**")
+            st.metric("🥣 Mezcla",        f"{mezcla_cap} est.")
+            st.metric("🔧 Dosificado",    f"{dosificado_cap} est.")
+            st.metric("🔥 Horno",         f"{cap_horno} est.", delta="⚠️ Crítico" if cap_horno <= 2 else "OK")
+            st.metric("❄️ Enfriamiento",  f"{enfriamiento_cap} est.")
+            st.metric("📦 Empaque",       f"{empaque_cap} est.")
+            st.metric("👐 Amasado",       f"{amasado_cap} est.")
+        with ps2:
+            st.markdown("**⏱️ Tiempos & Lógica**")
+            st.metric("Variabilidad tiempos",  f"{variabilidad}×")
+            st.metric("Espaciamiento lotes",   f"{espaciamiento}×")
+            st.metric("Iteraciones",           f"{iter_sim}")
+            st.metric("Fallas en horno",       "⚠️ SÍ" if falla_horno else "✓ NO")
+            st.metric("Doble turno",           "🕐 SÍ (−20%)" if doble_turno else "✓ NO")
+        with ps3:
+            st.markdown("**📊 Mes simulado**")
+            st.metric("Mes de análisis", MESES_F[mes_idx])
+            st.metric("Plan total und.", f"{sum(plan_mes.values()):,}")
+            st.metric("Semilla aleatoria", f"{int(semilla)}")
+        st.caption("💡 Modifica estos parámetros en la barra lateral sección '5 · Simulación Operativa'.")
 
     st.markdown('<div class="sec-title">🗓️ Plan del mes (unidades a producir)</div>', unsafe_allow_html=True)
     cols_p=st.columns(5)
@@ -1268,3 +1492,4 @@ st.markdown(f"""
   🥐 <b>Gemelo Digital — Panadería Dora del Hoyo v3.0</b> &nbsp;·&nbsp;
   LP Agregada · Desagregación · SimPy · Streamlit
 </div>""", unsafe_allow_html=True)
+
