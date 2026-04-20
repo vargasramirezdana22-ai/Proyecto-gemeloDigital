@@ -165,6 +165,27 @@ def pronostico_simple(serie, meses_extra=3):
     return suavizada, futuro
 
 
+def pronostico_holt_winters(serie, meses_extra=3, alpha=0.3, beta=0.2):
+    """Suavizado exponencial doble (Holt) con componente de tendencia.
+    L[t] = alpha*y[t] + (1-alpha)*(L[t-1]+T[t-1])
+    T[t] = beta*(L[t]-L[t-1]) + (1-beta)*T[t-1]
+    Pronostico h pasos: F[t+h] = L[t] + h*T[t]
+    Mejora sobre suavizado simple al capturar la direccion de la tendencia.
+    """
+    if len(serie) < 2:
+        return list(serie), [serie[-1]] * meses_extra
+    L = float(serie[0])
+    T = float(serie[1] - serie[0])
+    suavizada = []
+    for v in serie:
+        L_prev, T_prev = L, T
+        L = alpha * v + (1 - alpha) * (L_prev + T_prev)
+        T = beta * (L - L_prev) + (1 - beta) * T_prev
+        suavizada.append(round(L + T, 1))
+    futuro = [round(max(0.0, L + h * T), 1) for h in range(1, meses_extra + 1)]
+    return suavizada, futuro
+
+
 @st.cache_data(show_spinner=False)
 def run_agregacion(dem_hh_items, params_tuple):
     params = dict(params_tuple)
@@ -172,6 +193,7 @@ def run_agregacion(dem_hh_items, params_tuple):
     Ct=params["Ct"]; Ht=params["Ht"]; PIt=params["PIt"]
     CRt=params["CRt"]; COt=params["COt"]; Wm=params["CW_mas"]; Wd=params["CW_menos"]
     M=params["M"]; LRi=params["LR_inicial"]; stock_obj=params.get("stock_obj", 0.0)
+    inv_max=params.get("inv_max", 0.0)
 
     # Sufijo único por combinación de parámetros para evitar conflictos
     # de nombres en el registro global de PuLP entre llamadas cacheadas
@@ -198,6 +220,7 @@ def run_agregacion(dem_hh_items, params_tuple):
         mdl += LU[t]+LO[t] == M*P[t]
         mdl += LU[t] <= LR[t]
         if stock_obj > 0: mdl += I[t] >= stock_obj*d
+        if inv_max   > 0: mdl += I[t] <= inv_max          # restricción de almacenamiento
         if idx==0: mdl += LR[t] == LRi+Wmas[t]-Wmenos[t]
         else:      mdl += LR[t] == LR[tp]+Wmas[t]-Wmenos[t]
 
@@ -597,12 +620,35 @@ with tabs[0]:
     dem_h    = demanda_horas_hombre(DEM_HIST)
 
     st.markdown('<div class="sec-title">📈 Demanda histórica y pronóstico</div>', unsafe_allow_html=True)
-    st.markdown('<div class="info-box">Datos ajustados por mix de producto y factor de impulso global · Suavizado exponencial α=0.3 · Las líneas punteadas representan la proyección futura.</div>', unsafe_allow_html=True)
 
+    with st.expander("🔮 Método de pronóstico", expanded=True):
+        pm1, pm2, pm3, pm4 = st.columns(4)
+        metodo_pro = pm1.radio(
+            "Método", ["Suavizado Simple (ES)", "Holt-Winters (tendencia)"],
+            index=1, key="metodo_pro",
+            help="Holt-Winters captura la tendencia, mejorando el pronóstico frente al suavizado simple.",
+        )
+        alpha_pro = pm2.slider("α — Nivel", 0.05, 0.95, 0.30, 0.05, key="alpha_pro")
+        beta_pro  = pm3.slider("β — Tendencia (HW)", 0.05, 0.95, 0.20, 0.05, key="beta_pro",
+                               disabled=(metodo_pro == "Suavizado Simple (ES)"))
+        usar_hw   = (metodo_pro == "Holt-Winters (tendencia)")
+
+    st.markdown(
+        f'<div class="info-box">Datos ajustados por mix de producto y factor de impulso global · '
+        f'{"Holt-Winters α=" + str(alpha_pro) + " β=" + str(beta_pro) if usar_hw else "Suavizado Exponencial α=" + str(alpha_pro)} · '
+        f'Las líneas punteadas representan la proyección futura.</div>',
+        unsafe_allow_html=True
+    )
+
+    # Gráfica comparativa: datos reales + pronóstico seleccionado + (si HW) comparativa ES
     fig_pro = go.Figure()
     for p in PRODUCTOS:
         serie = DEM_HIST[p]
-        suav, futuro = pronostico_simple(serie, meses_pronostico)
+        if usar_hw:
+            suav, futuro = pronostico_holt_winters(serie, meses_pronostico, alpha_pro, beta_pro)
+            suav_es, futuro_es = pronostico_simple(serie, meses_pronostico)
+        else:
+            suav, futuro = pronostico_simple(serie, meses_pronostico)
         fig_pro.add_trace(go.Scatter(
             x=MESES_ES, y=serie, mode="lines+markers", name=PROD_LABELS[p],
             line=dict(color=PROD_COLORS_DARK[p], width=2.5),
@@ -612,23 +658,76 @@ with tabs[0]:
         fig_pro.add_trace(go.Scatter(
             x=[MESES_ES[-1]]+meses_fut, y=[suav[-1]]+futuro,
             mode="lines+markers", showlegend=False,
-            line=dict(color=PROD_COLORS_DARK[p], width=2, dash="dot"),
+            name=f"HW {PROD_LABELS[p]}" if usar_hw else f"ES {PROD_LABELS[p]}",
+            line=dict(color=PROD_COLORS_DARK[p], width=2.5, dash="dot"),
             marker=dict(size=9, color=PROD_COLORS[p], symbol="diamond",
                         line=dict(color=PROD_COLORS_DARK[p], width=1.5)),
         ))
+        # Línea de comparación ES en gris tenue cuando está activo HW
+        if usar_hw:
+            fig_pro.add_trace(go.Scatter(
+                x=[MESES_ES[-1]]+meses_fut, y=[suav_es[-1]]+futuro_es,
+                mode="lines", showlegend=False,
+                line=dict(color="#BBBBBB", width=1.2, dash="dash"),
+                hovertemplate="ES (ref): %{y:.0f}<extra></extra>",
+            ))
     fig_pro.add_vrect(
         x0=len(MESES_ES)-0.5, x1=len(MESES_ES)+meses_pronostico-0.5,
         fillcolor=hex_rgba(C["lavender"], 0.18), line_width=0,
         annotation_text="▶ Proyección", annotation_position="top left",
         annotation_font_color=C["rosewood"],
     )
+    metodo_label = "Holt-Winters" if usar_hw else "Suavizado Exponencial"
     fig_pro.update_layout(**PLOT_CFG, height=420,
-                          title="Demanda histórica y horizonte proyectado",
+                          title=f"Demanda histórica y horizonte proyectado — {metodo_label}",
                           xaxis_title="Mes", yaxis_title="Unidades estimadas",
                           legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center"),
                           xaxis=dict(showgrid=True, gridcolor=C["line"]),
                           yaxis=dict(showgrid=True, gridcolor=C["line"]))
     st.plotly_chart(fig_pro, use_container_width=True)
+
+    # Error MAE comparativo HW vs ES (solo si HW activo)
+    if usar_hw:
+        st.markdown('<div class="sec-title">📐 Comparativa de precisión: Holt-Winters vs Suavizado Simple</div>', unsafe_allow_html=True)
+        comp_rows = []
+        for p in PRODUCTOS:
+            serie = DEM_HIST[p]
+            suav_hw, _ = pronostico_holt_winters(serie, 0, alpha_pro, beta_pro)
+            suav_es, _ = pronostico_simple(serie, 0)
+            mae_hw = round(sum(abs(serie[i]-suav_hw[i]) for i in range(len(serie)))/len(serie), 1)
+            mae_es = round(sum(abs(serie[i]-suav_es[i]) for i in range(len(serie)))/len(serie), 1)
+            mejora = round((mae_es - mae_hw) / max(mae_es, 1) * 100, 1)
+            comp_rows.append({
+                "Producto": PROD_LABELS[p],
+                "MAE Holt-Winters": mae_hw,
+                "MAE Suavizado Simple": mae_es,
+                "Mejora %": mejora,
+            })
+        df_comp_pro = pd.DataFrame(comp_rows)
+        col_mae1, col_mae2 = st.columns([3, 2])
+        with col_mae1:
+            fig_mae = go.Figure()
+            fig_mae.add_trace(go.Bar(
+                x=df_comp_pro["Producto"], y=df_comp_pro["MAE Suavizado Simple"],
+                name="Suavizado Simple", marker_color=C["salmon"], marker_line_color="white",
+            ))
+            fig_mae.add_trace(go.Bar(
+                x=df_comp_pro["Producto"], y=df_comp_pro["MAE Holt-Winters"],
+                name="Holt-Winters", marker_color=C["mint"], marker_line_color="white",
+            ))
+            fig_mae.update_layout(**PLOT_CFG, barmode="group", height=260,
+                                  title="Error absoluto medio (MAE) — menor es mejor",
+                                  yaxis_title="Unidades", xaxis=dict(showgrid=False),
+                                  yaxis=dict(gridcolor=C["line"]),
+                                  legend=dict(orientation="h", y=-0.3, x=0.5, xanchor="center"))
+            st.plotly_chart(fig_mae, use_container_width=True)
+        with col_mae2:
+            st.dataframe(
+                df_comp_pro.style
+                .format({"MAE Holt-Winters":"{:.1f}","MAE Suavizado Simple":"{:.1f}","Mejora %":"{:+.1f}%"})
+                .background_gradient(subset=["Mejora %"], cmap="RdYlGn"),
+                use_container_width=True, height=260,
+            )
 
     col_a, col_b = st.columns(2)
     with col_a:
@@ -694,6 +793,24 @@ with tabs[1]:
         cwp = ac7.number_input("CW+ — Contratar (COP/H-H cap.)",    value=14_204, step=100, key="cwp")
         cwm = ac8.number_input("CW− — Despedir (COP/H-H cap.)",     value=15_061, step=100, key="cwm")
 
+    with st.expander("🏭 Restricción de almacenamiento", expanded=True):
+        inv_col1, inv_col2 = st.columns(2)
+        activar_inv_max = inv_col1.checkbox(
+            "Activar límite máximo de inventario", value=False, key="activar_inv_max",
+            help="Simula espacio físico limitado de bodega. El LP penalizará producción anticipada excesiva."
+        )
+        inv_max_hh = inv_col2.number_input(
+            "Capacidad máxima de bodega (H-H)", value=500, step=50, key="inv_max_hh",
+            disabled=not activar_inv_max,
+            help="Inventario máximo en H-H equivalentes. Activo solo si la casilla está marcada."
+        )
+        if activar_inv_max:
+            st.markdown(
+                f'<div class="info-box">⚠️ Restricción activa: inventario ≤ <b>{inv_max_hh} H-H</b> cada mes. '
+                f'Si la demanda requiere acumulación mayor, el modelo generará backlog en lugar de exceder bodega.</div>',
+                unsafe_allow_html=True
+            )
+
     with st.expander("👷 Fuerza laboral y capacidad", expanded=True):
         lc1,lc2,lc3,lc4 = st.columns(4)
         trab        = lc1.number_input("Trabajadores iniciales", value=10,  step=1,  key="trab")
@@ -713,6 +830,7 @@ with tabs[1]:
         "Ct":ct,"Ht":ht,"PIt":pit,"CRt":crt,"COt":cot,
         "CW_mas":cwp,"CW_menos":cwm,"M":1,
         "LR_inicial":round(LR_inicial,2),"stock_obj":stock_obj,
+        "inv_max": float(inv_max_hh) if activar_inv_max else 0.0,
     }
 
     # Necesitamos dem_h de la demanda — si MIX_FACTORS no está definido aún en este flujo,
@@ -1158,6 +1276,123 @@ with tabs[3]:
                              .background_gradient(subset=["Cumplimiento %"], cmap="YlGn"),
                              use_container_width=True)
 
+    # ── Recomendaciones automáticas ─────────────────────────────────────────
+    st.markdown('<div class="sec-title">🧠 Recomendaciones automáticas basadas en simulación</div>', unsafe_allow_html=True)
+    recomendaciones = []
+
+    # — Análisis de cuellos de botella —
+    if not df_util.empty:
+        for _, row in df_util.iterrows():
+            rec_name = REC_LABELS.get(row["Recurso"], row["Recurso"])
+            u = row["Utilizacion_%"]
+            cola = row["Cola Prom"]
+            cap  = int(row["Capacidad"])
+            if u >= 90:
+                recomendaciones.append((
+                    "error",
+                    f"Cuello crítico — {rec_name}",
+                    f"Utilización del {u:.1f}% con cola promedio de {cola:.2f} lotes. "
+                    f"Se recomienda ampliar capacidad de {cap} a {cap+1} unidades o redistribuir lotes "
+                    f"para reducir la saturación por debajo del 80%."
+                ))
+            elif u >= 80:
+                recomendaciones.append((
+                    "warn",
+                    f"Recurso en riesgo — {rec_name}",
+                    f"Utilización del {u:.1f}%, cerca del límite operativo. "
+                    f"Considerar turno adicional o pre-producción en meses de menor demanda."
+                ))
+        recursos_ok = df_util[df_util["Utilizacion_%"] < 60]
+        if not recursos_ok.empty:
+            nombres_sub = ", ".join(REC_LABELS.get(r, r) for r in recursos_ok["Recurso"])
+            recomendaciones.append((
+                "ok",
+                "Recursos con capacidad disponible",
+                f"{nombres_sub} operan por debajo del 60%. Pueden absorber carga redirigida desde cuellos de botella."
+            ))
+
+    # — Análisis de cumplimiento de plan —
+    if not df_kpis.empty:
+        bajo_cum = df_kpis[df_kpis["Cumplimiento %"] < 80]
+        if not bajo_cum.empty:
+            prods_bc = ", ".join(bajo_cum["Producto"].tolist())
+            recomendaciones.append((
+                "error",
+                "Cumplimiento crítico de plan",
+                f"{prods_bc} presentan cumplimiento menor al 80%. Revisar tiempos de lote, "
+                f"aumentar tamaño de lote (TAMANO_LOTE_BASE) o ajustar el plan de producción del mes."
+            ))
+        alto_lt = df_kpis[df_kpis["Lead Time (min/lote)"] > df_kpis["Lead Time (min/lote)"].mean() * 1.4]
+        if not alto_lt.empty:
+            prods_lt = ", ".join(alto_lt["Producto"].tolist())
+            recomendaciones.append((
+                "warn",
+                "Lead time elevado",
+                f"{prods_lt} tienen tiempos de lote un 40% por encima del promedio. "
+                f"Revisar la ruta de proceso o reducir variabilidad para mejorar el flujo."
+            ))
+
+    # — Análisis del plan agregado —
+    if not df_agr.empty:
+        meses_extra = df_agr[df_agr["Horas_Extras"] > 0]
+        if not meses_extra.empty:
+            total_extra = df_agr["Horas_Extras"].sum()
+            meses_extra_names = ", ".join(df_agr.loc[df_agr["Horas_Extras"]>0, "Mes_ES"].tolist())
+            recomendaciones.append((
+                "warn",
+                "Horas extra requeridas",
+                f"El plan óptimo requiere {total_extra:.0f} H-H adicionales en: {meses_extra_names}. "
+                f"Evaluar contratar {round(total_extra/160):.0f} trabajador(es) temporal(es) o nivelar producción anticipada."
+            ))
+        meses_back = df_agr[df_agr["Backlog_HH"] > 0]
+        if not meses_back.empty:
+            total_back = df_agr["Backlog_HH"].sum()
+            recomendaciones.append((
+                "error",
+                "Backlog en plan agregado",
+                f"Demanda diferida de {total_back:.0f} H-H en el horizonte anual. "
+                f"Aumentar capacidad regular (más trabajadores/turnos) o aceptar pérdida de ventas en esos meses."
+            ))
+        meses_cont = df_agr[df_agr["Contratacion"] > 0]
+        meses_desp = df_agr[df_agr["Despidos"] > 0]
+        if not meses_cont.empty and not meses_desp.empty:
+            recomendaciones.append((
+                "warn",
+                "Inestabilidad laboral",
+                f"El plan óptimo alterna contrataciones y despidos dentro del año. "
+                f"Considerar mayor flexibilidad horaria (HH slider) o workforce leveling para reducir rotación."
+            ))
+
+    # — Análisis de temperatura del horno —
+    if not df_sensores.empty:
+        excesos = int((df_sensores["temperatura"] > 200).sum())
+        total_s = len(df_sensores)
+        if excesos > total_s * 0.05:
+            recomendaciones.append((
+                "error",
+                "Temperatura del horno fuera de rango",
+                f"{excesos} de {total_s} lecturas ({excesos/total_s*100:.1f}%) superan los 200°C. "
+                f"Reducir la temperatura base o la capacidad del horno para evitar defectos en producto."
+            ))
+
+    # Render de recomendaciones
+    COLOR_MAP = {
+        "error": (C["pink"],    "🔴"),
+        "warn":  (C["butter"],  "🟡"),
+        "ok":    (C["mint"],    "🟢"),
+    }
+    if recomendaciones:
+        for nivel, titulo, texto in recomendaciones:
+            bg, emoji = COLOR_MAP[nivel]
+            st.markdown(
+                f'<div class="info-box" style="border-left:4px solid;'
+                f'border-color:{"#B9857E" if nivel=="error" else "#E8C27A" if nivel=="warn" else "#BFD8C1"};">'
+                f'<b>{emoji} {titulo}</b><br><span style="font-size:0.87rem">{texto}</span></div>',
+                unsafe_allow_html=True
+            )
+    else:
+        st.markdown('<div class="pill-ok">✅ Sistema en condiciones óptimas — sin alertas activas.</div>', unsafe_allow_html=True)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 5 — SENSORES
@@ -1494,5 +1729,6 @@ st.markdown("""
   🥐 <b>Gemelo Digital — Panadería Dora del Hoyo v4.0</b> &nbsp;·&nbsp;
   Optimización LP · Desagregación · SimPy · Streamlit
 </div>""", unsafe_allow_html=True)
+
 
 
